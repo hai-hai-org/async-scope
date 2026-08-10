@@ -1,0 +1,16 @@
+name: Feature Request
+description: 새로운 기능을 제안합니다
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 해결하려는 문제
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안하는 방법
+    validations:
+      required: true
