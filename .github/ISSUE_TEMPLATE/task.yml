@@ -1,0 +1,22 @@
+name: Task
+description: 버그/기능 제안 외 작업 (설정, 리팩토링, 문서, 잡업무 등)
+labels: ["task"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 배경
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 작업 범위
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: 참고
+    validations:
+      required: false
