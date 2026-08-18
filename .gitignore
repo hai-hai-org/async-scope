@@ -1,26 +1,35 @@
-# IDE
-.idea/
-.vscode/
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
 
-# Byte-compiled / cache
+# python
 __pycache__/
 *.py[cod]
-*.pyo
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-
-# Virtual environments
 .venv/
-venv/
-env/
-
-# Testing / coverage
+*.egg-info/
+dist/
+build/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 
-# Env vars
-.env
+# node
+node_modules/
+dashboard/dist/
+
+# react build output copied into the package
+src/asyncscope/web/static/
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
+*.pyo
+venv/
+env/
