@@ -5,6 +5,7 @@
 *.pem
 *.key
 credentials.json
+/mydocs
 
 # python
 __pycache__/
@@ -33,3 +34,6 @@ src/asyncscope/web/static/
 *.pyo
 venv/
 env/
+
+# M0 수집 출력
+asyncscope.jsonl
