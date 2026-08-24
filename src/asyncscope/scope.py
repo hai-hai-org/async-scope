@@ -19,6 +19,7 @@ from .collector import loop as loop_collector
 from .collector import monitoring
 from .collector import tasks as task_collector
 from .collector.middleware import RequestTracker
+from .storage import EventBuffer, EventBufferSink
 
 SINK_NAME = "asyncscope.jsonl"
 
@@ -48,6 +49,8 @@ class AsyncScope:
         app,
         project_root: str | Path | None = None,
         out=None,
+        buffer_size: int = 1000,
+        buffer: EventBuffer | None = None,
         threshold: float = loop_collector.DEFAULT_THRESHOLD,
         interval: float = loop_collector.DEFAULT_INTERVAL,
     ):
@@ -55,14 +58,20 @@ class AsyncScope:
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.threshold = threshold
         self.interval = interval
+        self.buffer = buffer if buffer is not None else EventBuffer(buffer_size)
         self._out = out
         self._own_out = False  # 우리가 연 sink만 우리가 닫는다
+        self._default_sink = False
         self._tracker = None
         self._heartbeat: asyncio.Task | None = None
 
     @property
     def installed(self) -> bool:
         return self._tracker is not None
+
+    @property
+    def events(self) -> list[dict]:
+        return self.buffer.snapshot()
 
     def install(self):
         """tracing을 켜고 ASGI app으로 쓸 self를 반환한다."""
@@ -73,10 +82,8 @@ class AsyncScope:
             raise RuntimeError(reason)
 
         if self._out is None:
-            # ponytail: 기본 sink는 project root의 JSON Lines 파일이다. ring buffer가
-            # 생기면 기본값을 그쪽으로 바꾼다.
-            self._out = open(self.project_root / SINK_NAME, "w", buffering=1)  # noqa: SIM115
-            self._own_out = True
+            self._out = EventBufferSink(self.buffer)
+            self._default_sink = True
         monitoring.start(self.project_root, self._out)
         self._tracker = RequestTracker(self.app)
         self._attach_to_loop()
@@ -94,6 +101,9 @@ class AsyncScope:
             self._out.close()
             self._out = None
             self._own_out = False
+        if self._default_sink:
+            self._out = None
+            self._default_sink = False
 
     def _attach_to_loop(self) -> None:
         """loop가 필요한 부착(Task factory, heartbeat). 없으면 첫 요청에서 다시 시도한다."""
