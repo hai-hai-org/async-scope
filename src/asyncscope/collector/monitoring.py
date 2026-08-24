@@ -49,8 +49,37 @@ request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "asyncscope_request_id", default=None
 )
 
+# Task identity는 sink가 소유한다. 값을 붙이는 쪽은 collector/tasks.py다.
+# (이름을 tasks.py에 두면 monitoring이 tasks를 import해야 해서 순환이 된다)
+TASK_ID_ATTR = "_asyncscope_task_id"
+
 _prefix: str | None = None
 _out = None
+
+
+def task_id(task) -> str | None:
+    """tasks.py의 factory가 붙인 안정적 id. factory가 없었으면 None."""
+    return getattr(task, TASK_ID_ATTR, None)
+
+
+def relative_source(code) -> dict | None:
+    """프로젝트 코드면 project-relative source, 아니면 None.
+
+    .venv가 project root 안에 있는 경우가 흔하므로 root 검사만으로는 site-packages가
+    새어 들어온다. asyncscope 자신도 프로젝트 코드가 아니다.
+    """
+    if _prefix is None:
+        return None
+    filename = code.co_filename
+    if not filename.startswith(_prefix) or filename.startswith(_SELF) or filename.startswith(_FOREIGN):
+        return None
+    return {
+        "file": filename[len(_prefix):],
+        "function": code.co_name,
+        "line": code.co_firstlineno,
+    }
+
+
 def emit(event_type: str, **fields) -> None:
     """tracing 중일 때만 한 줄 기록한다. timestamp와 공통 필드는 여기서 붙인다.
 
@@ -79,14 +108,13 @@ def _record(name: str, code):
         return DISABLE
     if not (code.co_flags & CO_COROUTINE):
         return DISABLE
-    filename = code.co_filename
-    if not filename.startswith(_prefix) or filename.startswith(_SELF) or filename.startswith(_FOREIGN):
+    source = relative_source(code)
+    if source is None:
         return DISABLE
     try:
         task = asyncio.current_task()
-        task_name = task.get_name() if task else None
     except RuntimeError:
-        task_name = None
+        task = None
     event_type, category, label = _NORMALIZED[name]
     # ponytail: suspend는 무엇을 await하는지 모른다. PY_YIELD의 code object는 yield하는
     # 쪽이고 awaitee가 아니다. 지원 adapter label은 classifiers/awaits.py에서 붙인다.
@@ -94,12 +122,8 @@ def _record(name: str, code):
     # ponytail: retval은 기록하지 않는다 (민감 값 미수집 경계).
     emit(
         event_type,
-        task_id=task_name,
-        source={
-            "file": filename[len(_prefix):],
-            "function": code.co_name,
-            "line": code.co_firstlineno,
-        },
+        task_id=task_id(task) if task else None,
+        source=source,
         category=category,
         label=label.format(name=code.co_qualname),
         **library,
@@ -144,12 +168,26 @@ def stop() -> None:
 
 @contextlib.contextmanager
 def tracing(project_root: str | Path):
-    """with tracing(root) as records: ...  — 블록을 빠져나온 뒤 records가 채워진다."""
+    """with tracing(root) as records: ...  — 블록을 빠져나온 뒤 records가 채워진다.
+
+    테스트용 전체 수집이므로 Task factory까지 붙인다. 없으면 coroutine 이벤트의
+    task_id가 전부 None이 되어 Task별 검사가 공허하게 통과한다.
+    """
+    from . import tasks  # module-level import는 순환 (tasks가 emit을 쓴다)
+
     buf = io.StringIO()
     records: list[dict] = []
     start(project_root, buf)
     try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        tasks.start(loop)
+    try:
         yield records
     finally:
+        if loop is not None:
+            tasks.stop()
         stop()
         records.extend(json.loads(line) for line in buf.getvalue().splitlines())

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .collector import loop as loop_collector
 from .collector import monitoring
+from .collector import tasks as task_collector
 from .collector.middleware import RequestTracker
 
 SINK_NAME = "asyncscope.jsonl"
@@ -78,7 +79,7 @@ class AsyncScope:
             self._own_out = True
         monitoring.start(self.project_root, self._out)
         self._tracker = RequestTracker(self.app)
-        self._start_heartbeat()
+        self._attach_to_loop()
         return self
 
     def uninstall(self) -> None:
@@ -86,6 +87,7 @@ class AsyncScope:
         if self._heartbeat is not None:
             self._heartbeat.cancel()
             self._heartbeat = None
+        task_collector.stop()
         monitoring.stop()
         self._tracker = None
         if self._own_out and self._out is not None:
@@ -93,19 +95,20 @@ class AsyncScope:
             self._out = None
             self._own_out = False
 
-    def _start_heartbeat(self) -> None:
-        """실행 중인 loop가 있을 때만 만든다. 없으면 첫 요청에서 다시 시도한다."""
+    def _attach_to_loop(self) -> None:
+        """loop가 필요한 부착(Task factory, heartbeat). 없으면 첫 요청에서 다시 시도한다."""
         if self._heartbeat is not None:
             return
         try:
-            asyncio.get_running_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             return
+        task_collector.start(loop)
         self._heartbeat = loop_collector.start(self.threshold, self.interval)
 
     async def __call__(self, scope, receive, send):
         if self._tracker is None:
             return await self.app(scope, receive, send)
-        # import 시점에 install()하면 loop가 없어서 heartbeat를 못 만든다. 여기서 만든다.
-        self._start_heartbeat()
+        # import 시점에 install()하면 loop가 없어서 여기서 붙인다.
+        self._attach_to_loop()
         return await self._tracker(scope, receive, send)
