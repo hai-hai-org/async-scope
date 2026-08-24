@@ -75,6 +75,30 @@ async def test_uninstalled_app_still_serves_but_records_nothing(demo_app):
     assert len(_rows(out)) == before, "tracing을 끈 뒤에도 기록됐다"
 
 
+async def test_default_sink_records_to_event_buffer(demo_app, tmp_path):
+    scope = AsyncScope(demo_app, project_root=tmp_path, buffer_size=10).install()
+
+    response = await _get(scope, "/demo/non-blocking")
+
+    assert response.status_code == 200
+    assert scope.events
+    assert all("sequence" in event for event in scope.events)
+    assert not (tmp_path / SINK_NAME).exists(), "기본 sink가 파일을 만들면 안 된다"
+    scope.uninstall()
+
+
+async def test_uninstalled_default_buffer_stops_growing(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT, buffer_size=10).install()
+    await _get(scope, "/demo/quick")
+    scope.uninstall()
+    before = len(scope.events)
+
+    response = await _get(scope, "/demo/quick")
+
+    assert response.status_code == 200
+    assert len(scope.events) == before, "tracing을 끈 뒤에도 buffer가 증가했다"
+
+
 async def test_install_twice_fails(demo_app):
     traced = AsyncScope(demo_app, project_root=ROOT, out=io.StringIO()).install()
     try:
@@ -84,11 +108,9 @@ async def test_install_twice_fails(demo_app):
         traced.uninstall()
 
 
-async def test_default_sink_is_a_file_in_project_root_and_is_reusable(demo_app, tmp_path):
+async def test_scope_is_reusable_with_default_buffer_sink(demo_app, tmp_path):
     scope = AsyncScope(demo_app, project_root=tmp_path)
     scope.install()
-    sink = tmp_path / SINK_NAME
-    assert sink.exists()
     scope.uninstall()
 
     # 상태가 완전히 정리됐으면 같은 객체를 다시 켤 수 있다.
