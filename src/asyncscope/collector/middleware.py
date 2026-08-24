@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
+import asyncio
 import itertools
+import time
 
 from .monitoring import emit, request_id
 
 _counter = itertools.count(1)
+
+
+def outcome(status_code: int | None, error: BaseException | None) -> dict:
+    """request.end의 status 판정. contracts/fixtures의 failure-cancel/disconnect 규칙이다."""
+    if isinstance(error, asyncio.CancelledError):
+        return {"status": "cancelled", "category": "cancelled", "label": "request cancelled"}
+    if error is not None:
+        return {"status": "failed", "category": "failure", "label": "handler failed"}
+    if status_code is None:
+        # response를 시작하지 못하고 끝났다. 원인을 client 연결 해제로만 설명한다.
+        return {
+            "status": "disconnected",
+            "category": "disconnected",
+            "label": "client disconnected",
+            "disconnect_reason": "client_disconnected",
+        }
+    if status_code >= 500:
+        return {"status": "failed", "category": "failure", "label": f"HTTP {status_code}"}
+    return {"status": "completed"}
 
 
 class RequestTracker:
@@ -26,17 +47,27 @@ class RequestTracker:
         rid = f"req-{next(_counter)}"
         token = request_id.set(rid)
         # ponytail: query string은 기록하지 않는다 (민감 값 미수집 경계). path만.
-        emit(event="request.start", request_id=rid, method=scope["method"], path=scope["path"])
-        status = None
+        emit("request.start", method=scope["method"], path=scope["path"])
+        started_ns = time.perf_counter_ns()
+        status_code = None
+        error = None
 
         async def send_wrapper(message):
-            nonlocal status
+            nonlocal status_code
             if message["type"] == "http.response.start":
-                status = message["status"]
+                status_code = message["status"]
             await send(message)
 
         try:
             await self.app(scope, receive, send_wrapper)
+        except BaseException as exc:  # 기록만 하고 앱 동작은 바꾸지 않는다
+            error = exc
+            raise
         finally:
-            emit(event="request.end", request_id=rid, status=status)
+            emit(
+                "request.end",
+                duration_ns=time.perf_counter_ns() - started_ns,
+                status_code=status_code,
+                **outcome(status_code, error),
+            )
             request_id.reset(token)

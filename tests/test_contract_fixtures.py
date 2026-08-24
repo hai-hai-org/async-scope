@@ -92,6 +92,32 @@ def _request_intervals(events):
     return intervals
 
 
+def assert_normalized(event):
+    """normalized event 하나가 계약을 지키는지 검사한다.
+
+    fixture와 실제 수집 결과가 같은 검사를 통과해야 하므로 여기서 한 번만 정의한다.
+    """
+    assert COMMON_FIELDS <= set(event), event
+    assert event["type"] in EVENT_TYPES, event
+    assert event["evidence"] in EVIDENCE, event
+
+    if event["evidence"] == "observed":
+        assert event["confidence"] is None, event
+    else:
+        assert isinstance(event["confidence"], int | float), event
+        assert 0 <= event["confidence"] <= 1, event
+
+    source = event["source"]
+    if source is not None:
+        assert set(source) == {"file", "function", "line"}, event
+        assert source["file"].endswith(".py"), event
+        assert not source["file"].startswith("/"), event
+        assert ".." not in Path(source["file"]).parts, event
+
+    for node in _walk(event):
+        assert FORBIDDEN_KEYS.isdisjoint(node), event
+
+
 def test_expected_fixture_files_exist():
     assert set(FIXTURES) == {
         "adapter-awaits",
@@ -111,24 +137,9 @@ def test_fixtures_follow_m0_normalized_contract():
 
         previous_ts = 0
         for event in fixture["events"]:
-            assert COMMON_FIELDS <= set(event), event
-            assert event["type"] in EVENT_TYPES
+            assert_normalized(event)
             assert event["timestamp_ns"] >= previous_ts
             previous_ts = event["timestamp_ns"]
-            assert event["evidence"] in EVIDENCE
-
-            if event["evidence"] == "observed":
-                assert event["confidence"] is None
-            else:
-                assert isinstance(event["confidence"], int | float)
-                assert 0 <= event["confidence"] <= 1
-
-            source = event["source"]
-            if source is not None:
-                assert set(source) == {"file", "function", "line"}
-                assert source["file"].endswith(".py")
-                assert not source["file"].startswith("/")
-                assert ".." not in Path(source["file"]).parts
 
 
 def test_fixtures_do_not_include_sensitive_values_or_collector_culprits():

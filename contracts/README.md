@@ -85,3 +85,35 @@ consume fixtures without depending on collector internals.
 
 M1 must still implement stable `task_id`, real `task.start/end/cancel`
 collection, adapter classifiers, and API/query behavior against this contract.
+
+## Collector 구현 현황
+
+collector(`asyncscope.collector`)는 이제 이 계약과 같은 필드 이름·단위로 emit한다.
+fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또는 보수적인 기본값으로 나간다.
+
+| 필드 | 지금 나오는 값 | 언제 채워지는가 |
+| --- | --- | --- |
+| `task_id` | Task 이름 (`Task-7`) | 안정적 Task identity 작업 |
+| `span_id`, `parent_span_id` | `null` | span tree 작업 |
+| `duration_ns` | `request.end`, `loop.blocked`만 채운다 | span tree 작업 (coroutine 구간) |
+| `coroutine.suspend`의 `label`, `library` | `"unknown await"`, `null` | adapter classifier 작업 |
+| `coroutine.end`의 `category` | 항상 `"running"` | `PY_UNWIND`/`PY_THROW` 수집 |
+| `request.end`의 `status: "disconnected"` | 실제로 나오지 않는다 (아래 참고) | 별도 결정 필요 |
+
+collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자가 무시해도 된다.
+
+| 필드 | 이벤트 | 뜻 |
+| --- | --- | --- |
+| `category`, `label` | `coroutine.*`, `loop.blocked`, `request.end` | Timeline segment 분류와 표시 문구 |
+| `gap_start_ns` | `loop.blocked` | 침묵 구간의 추정 시작 시각. 원인 지목이 아니다 |
+
+### 알려진 경계
+
+- 예외나 취소로 끝난 coroutine은 `PY_RETURN`이 발생하지 않으므로 `coroutine.start`의 짝이
+  없다. `failure-cancel.json`의 `category: "failed"`, `"cancelled"`는 `PY_UNWIND`/`PY_THROW`를
+  수집한 뒤에 만들 수 있다.
+- uvicorn HTTP에서 client가 연결을 끊어도 handler는 끝까지 실행되고 응답을 보낸다. 그래서
+  `status_code`가 `None`이 되는 경로가 실제로는 없고 `disconnected`도 나오지 않는다. 판정
+  규칙(`middleware.outcome`)은 단위 테스트로 고정해 두었다.
+- `request.end`의 `status`는 collector가 항상 내보낸다. `timeline.json`, `blocking.json`,
+  `unknown-await.json`에는 이 필드가 없다 — 합의 후 fixture를 채우면 된다.

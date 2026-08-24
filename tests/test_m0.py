@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DEMO = "examples/demo.py"
 
 
+def _function(row):
+    """normalized event의 source 함수명. source가 없는 이벤트는 None."""
+    return (row.get("source") or {}).get("function")
+
+
 async def _request(app, *paths):
     """paths를 거의 동시에 보낸다."""
     transport = httpx.ASGITransport(app=app)
@@ -45,12 +50,20 @@ async def test_concurrent_requests_suspend_and_resume(app):
     ids = {r["request_id"] for r in rows if r.get("request_id")}
     assert len(ids) == 2, ids
     for rid in ids:
-        steps = [r["event"] for r in rows if r.get("request_id") == rid and r.get("coroutine") == "_step"]
-        assert steps == ["PY_START", "PY_YIELD", "PY_RESUME", "PY_RETURN"], (rid, steps)
+        steps = [r["type"] for r in rows if r.get("request_id") == rid and _function(r) == "_step"]
+        assert steps == [
+            "coroutine.start",
+            "coroutine.suspend",
+            "coroutine.resume",
+            "coroutine.end",
+        ], (rid, steps)
 
     # 두 요청이 실제로 겹쳤다: 한쪽이 끝나기 전에 다른 쪽이 시작한다.
-    starts = {rid: next(r["ts"] for r in rows if r.get("request_id") == rid) for rid in ids}
-    ends = {rid: next(r["ts"] for r in reversed(rows) if r.get("request_id") == rid) for rid in ids}
+    starts = {rid: next(r["timestamp_ns"] for r in rows if r.get("request_id") == rid) for rid in ids}
+    ends = {
+        rid: next(r["timestamp_ns"] for r in reversed(rows) if r.get("request_id") == rid)
+        for rid in ids
+    }
     assert max(starts.values()) < min(ends.values()), "요청이 순차 실행됐다"
 
 
@@ -61,7 +74,9 @@ async def test_sleep_patterns_differ(app):
         await _request(app, "/demo/blocking")
 
     def yields(coroutine):
-        return [r for r in rows if r.get("coroutine") == coroutine and r["event"] == "PY_YIELD"]
+        return [
+            r for r in rows if _function(r) == coroutine and r["type"] == "coroutine.suspend"
+        ]
 
     assert yields("_step"), "asyncio.sleep이 suspend되지 않았다"
     assert not yields("blocking"), "time.sleep이 suspend된 것처럼 보인다"
@@ -74,8 +89,8 @@ async def test_request_ids_do_not_mix(app):
 
     per_task = {}
     for r in rows:
-        if r.get("task") and r.get("request_id"):
-            per_task.setdefault(r["task"], set()).add(r["request_id"])
+        if r.get("task_id") and r.get("request_id"):
+            per_task.setdefault(r["task_id"], set()).add(r["request_id"])
     assert all(len(v) == 1 for v in per_task.values()), per_task
 
 
@@ -98,9 +113,10 @@ async def test_heartbeat_detects_blocking(app):
         await asyncio.sleep(0.05)  # heartbeat가 지연을 관측하는 건 다음 tick이다
         hb.cancel()
 
-    blocked = [r for r in rows if r["event"] == "loop.blocked"]
+    blocked = [r for r in rows if r["type"] == "loop.blocked"]
     assert blocked, "time.sleep(0.3)을 감지하지 못했다"
-    assert max(r["delay_ms"] for r in blocked) > 200
+    assert max(r["delay_ns"] for r in blocked) > 200_000_000
+    assert all(r["request_id"] is None for r in blocked), "loop 지연은 특정 request 소유가 아니다"
     assert all(r["evidence"] == "inferred" for r in blocked), "blocking 원인을 단정하면 안 된다"
     assert all("suspect" not in r for r in blocked), "collector가 원인을 지목하면 안 된다"
 
@@ -109,7 +125,7 @@ def _culprit(rows, blocked):
     """침묵 구간 직전의 project coroutine. 원인 추정은 stream을 다 가진 쪽이 한다."""
     before = [
         r for r in rows
-        if "coroutine" in r and r["ts"] <= blocked["gap_start_ts"]
+        if _function(r) and r["timestamp_ns"] <= blocked["gap_start_ns"]
     ]
     return before[-1] if before else None
 
@@ -130,10 +146,10 @@ async def test_blocking_is_attributed_to_the_right_coroutine(app):
         await asyncio.sleep(0.05)
         hb.cancel()
 
-    blocked = next(r for r in rows if r["event"] == "loop.blocked")
+    blocked = next(r for r in rows if r["type"] == "loop.blocked")
     culprit = _culprit(rows, blocked)
     assert culprit is not None, "침묵 구간 직전 이벤트를 찾지 못했다"
-    assert culprit["coroutine"] == "blocking", culprit
+    assert _function(culprit) == "blocking", culprit
 
 
 async def test_heartbeat_ignores_normal_work(app):
@@ -145,7 +161,7 @@ async def test_heartbeat_ignores_normal_work(app):
         await asyncio.sleep(0.05)
         hb.cancel()
 
-    assert [r for r in rows if r["event"] == "loop.blocked"] == []
+    assert [r for r in rows if r["type"] == "loop.blocked"] == []
 
 
 # --- span tree -------------------------------------------------------------
@@ -158,15 +174,15 @@ def _spans(rows, request_id):
     """
     stack, roots = [], []
     for r in rows:
-        if r.get("request_id") != request_id or "coroutine" not in r:
+        if r.get("request_id") != request_id or not _function(r):
             continue
-        if r["event"] == "PY_START":
-            span = {"name": r["coroutine"], "start": r["ts"], "children": []}
+        if r["type"] == "coroutine.start":
+            span = {"name": _function(r), "start": r["timestamp_ns"], "children": []}
             (stack[-1]["children"] if stack else roots).append(span)
             stack.append(span)
-        elif r["event"] == "PY_RETURN" and stack:
+        elif r["type"] == "coroutine.end" and stack:
             span = stack.pop()
-            span["duration"] = r["ts"] - span["start"]
+            span["duration"] = r["timestamp_ns"] - span["start"]
     return roots
 
 
@@ -258,6 +274,7 @@ async def test_overhead_is_measured(app, capsys):
     with capsys.disabled():
         print(f"\n[overhead] off={off * 1000:.2f}ms on={on * 1000:.2f}ms ratio={ratio:.2f}x")
     # 측정 (M0, macOS/CPython 3.13): DISABLE 도입 전 1.60x → 도입 후 1.07x.
+    # normalized 공통 필드 추가 후 1.02~1.17x (실행 간 노이즈가 이 차이보다 크다).
     # 여기 /demo/quick은 대기가 없는 최악 조건이고, 실제 대기가 있는 요청은 1.01x다.
     # ponytail: set_local_events는 검토 후 기각. DISABLE 이후 남은 callback의 85%가
     # 실제로 기록되는 project coroutine이라 더 줄일 여지가 없다 (요청당 낭비 0.35회).
