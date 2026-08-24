@@ -22,6 +22,9 @@ COMMON_FIELDS = {
 EVENT_TYPES = {
     "request.start",
     "request.end",
+    "task.start",
+    "task.end",
+    "task.cancel",
     "coroutine.start",
     "coroutine.suspend",
     "coroutine.resume",
@@ -58,6 +61,7 @@ KNOWN_ADAPTER_LABELS = {
     "websocket",
     "websockets",
 }
+ADAPTER_LIBRARIES = {"asyncpg", "httpx", "redis.asyncio", "websockets"}
 
 
 def _events(name):
@@ -89,7 +93,15 @@ def _request_intervals(events):
 
 
 def test_expected_fixture_files_exist():
-    assert set(FIXTURES) == {"blocking", "timeline", "unknown-await"}
+    assert set(FIXTURES) == {
+        "adapter-awaits",
+        "background-task",
+        "blocking",
+        "disconnect",
+        "failure-cancel",
+        "timeline",
+        "unknown-await",
+    }
 
 
 def test_fixtures_follow_m0_normalized_contract():
@@ -175,3 +187,68 @@ def test_unknown_await_fixture_does_not_claim_a_known_adapter():
     assert event["library"] is None
     label = event["label"].lower()
     assert all(adapter not in label for adapter in KNOWN_ADAPTER_LABELS)
+
+
+def test_background_task_fixture_has_parent_child_and_terminal_states():
+    events = _events("background-task")
+    task_events = [event for event in events if event["type"].startswith("task.")]
+
+    assert {event["type"] for event in task_events} == {
+        "task.start",
+        "task.end",
+        "task.cancel",
+    }
+    assert all(event["parent_task_id"] for event in task_events)
+    assert any(event["status"] == "completed" for event in task_events)
+    assert any(event["status"] == "cancelled" for event in task_events)
+
+    background_spans = {
+        event["span_id"]
+        for event in events
+        if (event.get("source") or {}).get("function") == "_background_job"
+    }
+    assert {"span-background-complete", "span-background-cancel"} <= background_spans
+
+
+def test_adapter_fixture_names_supported_libraries_with_evidence():
+    adapter_events = [
+        event
+        for event in _events("adapter-awaits")
+        if event.get("category") == "await"
+    ]
+
+    assert {event["library"] for event in adapter_events} == ADAPTER_LIBRARIES
+    assert all(event["evidence"] == "observed" for event in adapter_events)
+    assert all(event["confidence"] is None for event in adapter_events)
+    assert all(event["label"].startswith("await ") for event in adapter_events)
+
+
+def test_failure_cancel_and_disconnect_fixtures_expose_user_visible_status():
+    failure_cancel_statuses = {
+        event.get("status")
+        for event in _events("failure-cancel")
+        if event["type"] == "request.end"
+    }
+    disconnect_statuses = {
+        event.get("status")
+        for event in _events("disconnect")
+        if event["type"] == "request.end"
+    }
+
+    assert {"failed", "cancelled"} <= failure_cancel_statuses
+    assert "disconnected" in disconnect_statuses
+
+    failure = next(
+        event
+        for event in _events("failure-cancel")
+        if event["type"] == "request.end" and event.get("status") == "failed"
+    )
+    assert failure["status_code"] == 500
+
+    disconnected = next(
+        event
+        for event in _events("disconnect")
+        if event["type"] == "request.end" and event.get("status") == "disconnected"
+    )
+    assert disconnected["status_code"] is None
+    assert disconnected["disconnect_reason"] == "client_disconnected"

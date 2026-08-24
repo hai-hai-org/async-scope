@@ -1,0 +1,156 @@
+{
+  "schema_version": "m0.normalized.v1",
+  "scenario": "failed and cancelled requests keep user-visible terminal status without exposing sensitive values",
+  "events": [
+    {
+      "type": "request.start",
+      "timestamp_ns": 5000000000,
+      "request_id": "req-failure",
+      "task_id": "Task-failure",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/failure"
+    },
+    {
+      "type": "coroutine.start",
+      "timestamp_ns": 5001000000,
+      "request_id": "req-failure",
+      "task_id": "Task-failure",
+      "span_id": "span-failure-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "failure",
+        "line": 82
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "failure()"
+    },
+    {
+      "type": "coroutine.end",
+      "timestamp_ns": 5002000000,
+      "request_id": "req-failure",
+      "task_id": "Task-failure",
+      "span_id": "span-failure-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "failure",
+        "line": 82
+      },
+      "duration_ns": 1000000,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "failed",
+      "label": "handler failed"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 5003000000,
+      "request_id": "req-failure",
+      "task_id": "Task-failure",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 3000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 500,
+      "status": "failed",
+      "category": "failure",
+      "label": "HTTP 500"
+    },
+    {
+      "type": "request.start",
+      "timestamp_ns": 5100000000,
+      "request_id": "req-cancel",
+      "task_id": "Task-cancel",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/long-running"
+    },
+    {
+      "type": "coroutine.start",
+      "timestamp_ns": 5101000000,
+      "request_id": "req-cancel",
+      "task_id": "Task-cancel",
+      "span_id": "span-cancel-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "long_running",
+        "line": 87
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "long_running()"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 5102000000,
+      "request_id": "req-cancel",
+      "task_id": "Task-cancel",
+      "span_id": "span-cancel-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "long_running",
+        "line": 87
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await asyncio.sleep"
+    },
+    {
+      "type": "coroutine.end",
+      "timestamp_ns": 5120000000,
+      "request_id": "req-cancel",
+      "task_id": "Task-cancel",
+      "span_id": "span-cancel-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "long_running",
+        "line": 87
+      },
+      "duration_ns": 19000000,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "cancelled",
+      "label": "long_running() cancelled"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 5121000000,
+      "request_id": "req-cancel",
+      "task_id": "Task-cancel",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 21000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": null,
+      "status": "cancelled",
+      "category": "cancelled",
+      "label": "request cancelled"
+    }
+  ]
+}

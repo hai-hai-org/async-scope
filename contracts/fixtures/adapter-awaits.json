@@ -1,0 +1,110 @@
+{
+  "schema_version": "m0.normalized.v1",
+  "scenario": "supported adapter waits expose meaningful labels with explicit adapter evidence",
+  "events": [
+    {
+      "type": "request.start",
+      "timestamp_ns": 6000000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/adapters"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 6001000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": "span-adapter-db",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "adapter_demo",
+        "line": 92
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await asyncpg fetch",
+      "library": "asyncpg"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 6002000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": "span-adapter-http",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "adapter_demo",
+        "line": 93
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await HTTPX request",
+      "library": "httpx"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 6003000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": "span-adapter-redis",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "adapter_demo",
+        "line": 94
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await Redis command",
+      "library": "redis.asyncio"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 6004000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": "span-adapter-websocket",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "adapter_demo",
+        "line": 95
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await WebSocket receive",
+      "library": "websockets"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 6005000000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 5000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "status": "completed"
+    }
+  ]
+}

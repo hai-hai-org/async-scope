@@ -4,9 +4,9 @@ M0의 목적은 `sys.monitoring` 수집 방식이 제품에서 사용할 수 있
 정규화될 수 있는지 검증하는 것이다. 이 디렉터리의 fixture는 collector raw log가
 아니라, M1 API와 M2 UI가 바라볼 normalized contract 예시다.
 
-## Raw event mapping
+## Event mapping
 
-| M0 raw event | Normalized event | Meaning |
+| Source signal | Normalized event | Meaning |
 | --- | --- | --- |
 | `request.start` | `request.start` | HTTP request lifecycle 시작 |
 | `request.end` | `request.end` | HTTP request lifecycle 종료 |
@@ -15,6 +15,7 @@ M0의 목적은 `sys.monitoring` 수집 방식이 제품에서 사용할 수 있
 | `PY_RESUME` | `coroutine.resume` | 중단된 coroutine 실행 재개 |
 | `PY_RETURN` | `coroutine.end` | coroutine 종료 |
 | `loop.blocked` | `loop.blocked` | heartbeat 기준 event loop 지연 감지 |
+| M1 Task lifecycle | `task.start`, `task.end`, `task.cancel` | background Task의 생성, 완료, 취소를 UI가 소비할 형태 |
 
 ## Common event fields
 
@@ -34,8 +35,9 @@ M0의 목적은 `sys.monitoring` 수집 방식이 제품에서 사용할 수 있
 | `confidence` | `observed`이면 `null`, 추론이면 0~1 number |
 
 Event-specific fields such as `method`, `path`, `status_code`, `category`,
-`label`, `library`, `delay_ns`, and `threshold_ns` remain top-level fields so
-the dashboard can consume fixtures without depending on collector internals.
+`label`, `library`, `delay_ns`, `threshold_ns`, `status`, `parent_task_id`,
+`outcome`, and `disconnect_reason` remain top-level fields so the dashboard can
+consume fixtures without depending on collector internals.
 
 ## Consumer mapping
 
@@ -43,6 +45,7 @@ the dashboard can consume fixtures without depending on collector internals.
 | --- | --- |
 | Timeline request lane | `request.start`, `request.end` |
 | Timeline coroutine segment | `coroutine.start`, `coroutine.suspend`, `coroutine.resume`, `coroutine.end` |
+| Background Task lane | `task.start`, `task.end`, `task.cancel` |
 | Blocking marker | `loop.blocked` |
 | Request inspector metadata | request lifecycle fields and request duration |
 | Execution Flow | `span_id`, `parent_span_id`, source, and coroutine start/end duration |
@@ -60,6 +63,25 @@ the dashboard can consume fixtures without depending on collector internals.
   evidence.
 - `loop.blocked` in M0 is an unattributed delay. The collector must not attach
   a `suspect` or otherwise name a culprit from heartbeat timing alone.
+- Background task, adapter, cancel, and disconnect fixtures include expected
+  normalized fields that M1 collectors and query APIs must produce. They are
+  consumer contracts, not proof that the current M0 collector already emits
+  every normalized event.
 - Fixtures must not contain request/response body, headers, cookies, query
   string, function argument values, local variable values, environment values,
   or absolute filesystem paths.
+
+## M0 scenario coverage
+
+| Scenario | Fixture | Status |
+| --- | --- | --- |
+| Concurrent `asyncio.sleep` requests | `timeline.json` | done |
+| Event loop delay from `time.sleep` | `blocking.json` | done |
+| Unsupported await fallback | `unknown-await.json` | done |
+| Background Task complete/cancel | `background-task.json` | demo + fixture |
+| Failure and request cancellation | `failure-cancel.json` | demo + fixture |
+| Supported adapter labels | `adapter-awaits.json` | fixture-only |
+| Client disconnect | `disconnect.json` | fixture-only |
+
+M1 must still implement stable `task_id`, real `task.start/end/cancel`
+collection, adapter classifiers, and API/query behavior against this contract.
