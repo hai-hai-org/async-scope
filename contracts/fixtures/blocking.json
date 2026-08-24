@@ -1,0 +1,148 @@
+{
+  "schema_version": "m0.normalized.v1",
+  "scenario": "/demo/blocking delays the event loop and /demo/quick waits behind it",
+  "events": [
+    {
+      "type": "request.start",
+      "timestamp_ns": 2000000000,
+      "request_id": "req-blocking",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/blocking"
+    },
+    {
+      "type": "coroutine.start",
+      "timestamp_ns": 2001000000,
+      "request_id": "req-blocking",
+      "task_id": "Task-blocking",
+      "span_id": "span-blocking-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "blocking",
+        "line": 49
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "blocking()"
+    },
+    {
+      "type": "loop.blocked",
+      "timestamp_ns": 2311000000,
+      "request_id": null,
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 300000000,
+      "evidence": "inferred",
+      "confidence": 0.6,
+      "category": "blocking",
+      "label": "unattributed loop delay",
+      "delay_ns": 300000000,
+      "threshold_ns": 50000000
+    },
+    {
+      "type": "coroutine.end",
+      "timestamp_ns": 2312000000,
+      "request_id": "req-blocking",
+      "task_id": "Task-blocking",
+      "span_id": "span-blocking-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "blocking",
+        "line": 49
+      },
+      "duration_ns": 311000000,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "blocking()"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 2313000000,
+      "request_id": "req-blocking",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 313000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200
+    },
+    {
+      "type": "request.start",
+      "timestamp_ns": 2314000000,
+      "request_id": "req-quick",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/quick"
+    },
+    {
+      "type": "coroutine.start",
+      "timestamp_ns": 2315000000,
+      "request_id": "req-quick",
+      "task_id": "Task-quick",
+      "span_id": "span-quick-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "quick",
+        "line": 55
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "quick()"
+    },
+    {
+      "type": "coroutine.end",
+      "timestamp_ns": 2316000000,
+      "request_id": "req-quick",
+      "task_id": "Task-quick",
+      "span_id": "span-quick-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "quick",
+        "line": 55
+      },
+      "duration_ns": 1000000,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "quick()"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 2317000000,
+      "request_id": "req-quick",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 3000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200
+    }
+  ]
+}

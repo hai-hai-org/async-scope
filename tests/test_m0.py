@@ -182,6 +182,31 @@ async def test_span_tree_has_parent_child(app):
     assert child["duration"] >= 50_000_000 * 0.8  # asyncio.sleep(0.05), 여유 있게
 
 
+async def test_z_m0_demo_scenarios_are_callable(app):
+    """z가 fixture로 확장할 demo endpoint가 최소 동작한다."""
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+        background = await client.post("/demo/background")
+        await asyncio.sleep(0.06)
+        cancelled = await client.post("/demo/background-cancel")
+        failure = await client.get("/demo/failure")
+        adapters = await client.get("/demo/adapters")
+
+        long_running = asyncio.create_task(client.get("/demo/long-running"))
+        await asyncio.sleep(0)
+        long_running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await long_running
+
+    assert background.status_code == 200
+    assert background.json()["status"] == "started"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert failure.status_code == 500
+    assert adapters.status_code == 200
+    assert adapters.json()["result"] == "fixture-only"
+
+
 # --- source 경계 -----------------------------------------------------------
 
 

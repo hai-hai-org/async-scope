@@ -1,0 +1,73 @@
+{
+  "schema_version": "m0.normalized.v1",
+  "scenario": "client disconnect produces a user-visible disconnected request state without a status code",
+  "events": [
+    {
+      "type": "request.start",
+      "timestamp_ns": 7000000000,
+      "request_id": "req-disconnect",
+      "task_id": "Task-disconnect",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "method": "GET",
+      "path": "/demo/long-running"
+    },
+    {
+      "type": "coroutine.start",
+      "timestamp_ns": 7001000000,
+      "request_id": "req-disconnect",
+      "task_id": "Task-disconnect",
+      "span_id": "span-disconnect-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "long_running",
+        "line": 87
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "running",
+      "label": "long_running()"
+    },
+    {
+      "type": "coroutine.suspend",
+      "timestamp_ns": 7002000000,
+      "request_id": "req-disconnect",
+      "task_id": "Task-disconnect",
+      "span_id": "span-disconnect-handler",
+      "parent_span_id": null,
+      "source": {
+        "file": "examples/demo.py",
+        "function": "long_running",
+        "line": 87
+      },
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "category": "await",
+      "label": "await asyncio.sleep"
+    },
+    {
+      "type": "request.end",
+      "timestamp_ns": 7020000000,
+      "request_id": "req-disconnect",
+      "task_id": "Task-disconnect",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": 20000000,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": null,
+      "status": "disconnected",
+      "category": "disconnected",
+      "label": "client disconnected",
+      "disconnect_reason": "client_disconnected"
+    }
+  ]
+}
