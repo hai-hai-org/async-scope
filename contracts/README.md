@@ -93,12 +93,15 @@ fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또�
 
 | 필드 | 지금 나오는 값 | 언제 채워지는가 |
 | --- | --- | --- |
-| `task_id` | Task 이름 (`Task-7`) | 안정적 Task identity 작업 |
 | `span_id`, `parent_span_id` | `null` | span tree 작업 |
-| `duration_ns` | `request.end`, `loop.blocked`만 채운다 | span tree 작업 (coroutine 구간) |
+| `duration_ns` | `request.end`, `loop.blocked`, `task.end`, `task.cancel`만 채운다 | span tree 작업 (coroutine 구간) |
 | `coroutine.suspend`의 `label`, `library` | `"unknown await"`, `null` | adapter classifier 작업 |
 | `coroutine.end`의 `category` | 항상 `"running"` | `PY_UNWIND`/`PY_THROW` 수집 |
 | `request.end`의 `status: "disconnected"` | 실제로 나오지 않는다 (아래 참고) | 별도 결정 필요 |
+
+`task_id`는 collector가 부여하는 `task-<n>`이다. Task 이름(`Task-7`)은 loop가 붙이는 순번이고
+사용자가 `name=`으로 덮어쓸 수 있어서 식별자로 쓰지 않는다. coroutine 이벤트와 task 이벤트가 같은
+id를 쓴다.
 
 collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자가 무시해도 된다.
 
@@ -106,6 +109,7 @@ collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자
 | --- | --- | --- |
 | `category`, `label` | `coroutine.*`, `loop.blocked`, `request.end` | Timeline segment 분류와 표시 문구 |
 | `gap_start_ns` | `loop.blocked` | 침묵 구간의 추정 시작 시각. 원인 지목이 아니다 |
+| `outcome: "raised"` | `task.end` | 예외로 끝난 Task. fixture에 없는 값이다 (`status: "failed"`) |
 
 ### 알려진 경계
 
@@ -115,5 +119,11 @@ collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자
 - uvicorn HTTP에서 client가 연결을 끊어도 handler는 끝까지 실행되고 응답을 보낸다. 그래서
   `status_code`가 `None`이 되는 경로가 실제로는 없고 `disconnected`도 나오지 않는다. 판정
   규칙(`middleware.outcome`)은 단위 테스트로 고정해 두었다.
+- `task.*` 이벤트는 프로젝트 코드 coroutine으로 만든 Task만 낸다. uvicorn 내부 Task와
+  asyncscope 자신의 heartbeat는 이벤트를 만들지 않지만 `task_id`는 받으므로, 소비자는
+  스트림에 없는 `parent_task_id`를 만날 수 있다. request 연결은 `request_id`로 한다.
+- 실패한 Task의 판정에 `Task.exception()`을 쓴다. 그래서 asyncscope가 붙어 있으면 asyncio의
+  "Task exception was never retrieved" 경고가 사라진다. 실패 사실은 `task.end status: "failed"`로
+  대신 보인다.
 - `request.end`의 `status`는 collector가 항상 내보낸다. `timeline.json`, `blocking.json`,
   `unknown-await.json`에는 이 필드가 없다 — 합의 후 fixture를 채우면 된다.
