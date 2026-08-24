@@ -12,25 +12,32 @@ from .monitoring import emit
 # 계측하는 방향으로 올린다. 두 값은 실측으로 조정하는 노브다 (Settings API가 노출할 값).
 DEFAULT_THRESHOLD = 0.05
 DEFAULT_INTERVAL = 0.01
+# heartbeat sampling의 고정 신뢰도. contracts/fixtures/blocking.json에서 합의된 값이다.
+CONFIDENCE = 0.6
 
 
 async def heartbeat(threshold: float = DEFAULT_THRESHOLD, interval: float = DEFAULT_INTERVAL):
     """threshold를 넘는 loop 지연마다 loop.blocked를 기록한다. 취소될 때까지 돈다."""
+    threshold_ns = round(threshold * 1e9)
     while True:
         t0 = time.perf_counter()
         await asyncio.sleep(interval)
-        delay = time.perf_counter() - t0 - interval
-        if delay > threshold:
+        delay_ns = round((time.perf_counter() - t0 - interval) * 1e9)
+        if delay_ns > threshold_ns:
             # 원인을 여기서 지목하지 않는다. 깨어난 시점에 마지막으로 관측된 coroutine은
             # 이미 blocking이 끝난 뒤에 실행된 다른 요청일 수 있다 (실측으로 확인).
             # 대신 침묵 구간만 기록하고, 그 직전 이벤트를 찾는 건 stream을 다 가진
-            # 분석 쪽이 한다 — analysis/findings.py, M1.
+            # 분석 쪽이 한다 — analysis/findings.py.
             emit(
-                event="loop.blocked",
-                delay_ms=round(delay * 1000, 1),
-                threshold_ms=round(threshold * 1000, 1),
-                gap_start_ts=time.perf_counter_ns() - int(delay * 1e9),
+                "loop.blocked",
+                duration_ns=delay_ns,
                 evidence="inferred",
+                confidence=CONFIDENCE,
+                category="blocking",
+                label="unattributed loop delay",
+                delay_ns=delay_ns,
+                threshold_ns=threshold_ns,
+                gap_start_ns=time.perf_counter_ns() - delay_ns,
             )
 
 
