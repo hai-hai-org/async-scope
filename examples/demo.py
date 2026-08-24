@@ -6,8 +6,11 @@ consumer contract 검증용이다. adapter와 disconnect는 M0에서 fixture-onl
 
     uv run uvicorn examples.demo:traced --port 8000
 
-수집 결과는 asyncscope.jsonl로 흐른다. ponytail: 파일에 직접 쓴다.
-ring buffer와 SSE는 `z`의 M1 작업이므로 여기서 미리 만들지 않는다.
+수집 결과는 asyncscope.jsonl로 흐른다.
+
+일반 앱은 `traced = AsyncScope(app).install()` 한 줄로 끝난다. 이 demo는 테스트가
+`from examples.demo import app`으로 import하므로 import 시점에 install하지 않고
+lifespan에서 켠다.
 """
 
 import asyncio
@@ -17,24 +20,18 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 
-from asyncscope.collector import loop as loop_collector
-from asyncscope.collector import monitoring
-from asyncscope.collector.middleware import RequestTracker
+from asyncscope import AsyncScope
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    out = open(ROOT / "asyncscope.jsonl", "w", buffering=1)  # noqa: SIM115, ASYNC230 — 시작 시 1회, lifespan이 닫는다
-    monitoring.start(ROOT, out)
-    heartbeat = loop_collector.start()
+    scope.install()
     try:
         yield
     finally:
-        heartbeat.cancel()
-        monitoring.stop()
-        out.close()
+        scope.uninstall()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -111,4 +108,5 @@ async def adapter_demo():
     return {"result": "fixture-only"}
 
 
-traced = RequestTracker(app)
+scope = AsyncScope(app, project_root=ROOT)
+traced = scope
