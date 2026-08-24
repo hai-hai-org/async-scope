@@ -111,9 +111,15 @@ def start(project_root: str | Path, out) -> None:
     global _prefix, _out
     if _out is not None:
         raise RuntimeError("already tracing")
+    m = sys.monitoring
+    holder = m.get_tool(_TOOL_ID)
+    if holder is not None:
+        raise RuntimeError(
+            f"sys.monitoring PROFILER_ID를 {holder!r}가 사용 중이다. "
+            "해당 profiler를 끄고 다시 시도한다."
+        )
     _prefix = str(Path(project_root).resolve()) + os.sep
     _out = out
-    m = sys.monitoring
     m.restart_events()  # 이전 실행에서 DISABLE된 location을 되살린다
     m.use_tool_id(_TOOL_ID, "asyncscope")
     mask = 0

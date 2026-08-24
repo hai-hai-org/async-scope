@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import time
 
 from .monitoring import emit
@@ -42,5 +43,13 @@ async def heartbeat(threshold: float = DEFAULT_THRESHOLD, interval: float = DEFA
 
 
 def start(threshold: float = DEFAULT_THRESHOLD, interval: float = DEFAULT_INTERVAL) -> asyncio.Task:
-    """호출자가 반환된 Task를 cancel해서 멈춘다."""
-    return asyncio.create_task(heartbeat(threshold, interval), name="asyncscope-heartbeat")
+    """호출자가 반환된 Task를 cancel해서 멈춘다.
+
+    빈 Context에서 만든다. 요청 처리 중에 heartbeat를 시작하면 그 요청의 context가
+    복사되어 loop.blocked에 request_id가 붙는다 — loop 지연은 특정 요청 소유가 아니다.
+    """
+    return asyncio.create_task(
+        heartbeat(threshold, interval),
+        name="asyncscope-heartbeat",
+        context=contextvars.Context(),
+    )
