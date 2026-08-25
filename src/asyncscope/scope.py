@@ -60,8 +60,7 @@ class AsyncScope:
         self.interval = interval
         self.buffer = buffer if buffer is not None else EventBuffer(buffer_size)
         self._out = out
-        self._own_out = False  # 우리가 연 sink만 우리가 닫는다
-        self._default_sink = False
+        self._default_sink = False  # 기본 sink만 우리가 정리한다
         self._tracker = None
         self._heartbeat: asyncio.Task | None = None
 
@@ -90,17 +89,16 @@ class AsyncScope:
         return self
 
     def uninstall(self) -> None:
-        """monitoring callback, heartbeat Task, 우리가 연 sink를 모두 정리한다."""
+        """monitoring callback, heartbeat Task, 우리가 만든 sink를 모두 정리한다.
+
+        out=으로 받은 sink는 호출자 소유이므로 닫지 않는다.
+        """
         if self._heartbeat is not None:
             self._heartbeat.cancel()
             self._heartbeat = None
         task_collector.stop()
         monitoring.stop()
         self._tracker = None
-        if self._own_out and self._out is not None:
-            self._out.close()
-            self._out = None
-            self._own_out = False
         if self._default_sink:
             self._out = None
             self._default_sink = False

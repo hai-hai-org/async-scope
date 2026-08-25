@@ -6,7 +6,7 @@ consumer contract 검증용이다. adapter와 disconnect는 M0에서 fixture-onl
 
     uv run uvicorn examples.demo:traced --port 8000
 
-수집 결과는 asyncscope.jsonl로 흐른다.
+수집 결과는 파일이 아니라 메모리 ring buffer로 흐른다 (`scope.events`).
 
 일반 앱은 `traced = AsyncScope(app).install()` 한 줄로 끝난다. 이 demo는 테스트가
 `from examples.demo import app`으로 import하므로 import 시점에 install하지 않고
