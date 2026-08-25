@@ -11,9 +11,11 @@ threshold를 바꾸면 과거 데이터에도 소급 적용된다.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from . import QueryError, filter_values, paginate
+from .recommendations import recommend
 from .requests import group_by_request
 from .spans import blocked_gap, blocked_intervals, time_distribution
 
@@ -40,6 +42,7 @@ def query_findings(
     request_id: str | Iterable[str] | None = None,
     page: int | str = 1,
     page_size: int | str = 50,
+    project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """severity/evidence/type filter와 affected request query."""
 
@@ -55,25 +58,44 @@ def query_findings(
 
     rows = [
         finding
-        for finding in build_findings(events)
+        for finding in build_findings(events, project_root=project_root)
         if _matches(finding, types, severities, evidences, request_ids)
     ]
     return paginate(rows, page, page_size)
 
 
-def get_finding(events: Iterable[dict[str, Any]], finding_id: str) -> dict[str, Any] | None:
+def get_finding(
+    events: Iterable[dict[str, Any]],
+    finding_id: str,
+    *,
+    project_root: str | Path | None = None,
+) -> dict[str, Any] | None:
     return next(
-        (finding for finding in build_findings(events) if finding["finding_id"] == finding_id),
+        (
+            finding
+            for finding in build_findings(events, project_root=project_root)
+            if finding["finding_id"] == finding_id
+        ),
         None,
     )
 
 
-def build_findings(events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """심각한 것부터, 같은 심각도면 최근 것부터."""
+def build_findings(
+    events: Iterable[dict[str, Any]],
+    *,
+    project_root: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """심각한 것부터, 같은 심각도면 최근 것부터.
+
+    project_root가 있으면 suspect 함수의 소스를 읽어 known blocking call을 지목한다.
+    없으면 측정 안내로 떨어진다.
+    """
     events = list(events)
     grouped = group_by_request(events)
     findings = _blocking_findings(events, grouped)
     findings.extend(_unattributed_findings(events, grouped))
+    for finding in findings:
+        finding["recommendation"] = recommend(finding, project_root)
     findings.sort(
         key=lambda finding: (_SEVERITY_RANK[finding["severity"]], finding["detected_at_ns"]),
         reverse=True,
@@ -111,7 +133,7 @@ def _blocking_findings(
                 "threshold_ns": threshold_ns,
                 "suspect": _suspect(ordered, gap_start),
                 "affected_requests": _requests_overlapping(grouped, gap_start, gap_end),
-                # Day 10. 검증된 대안은 classifiers/blocking.py의 KNOWN_BLOCKING에서 온다.
+                # build_findings가 채운다. 여기서는 키 순서만 잡는다.
                 "recommendation": None,
             }
         )
