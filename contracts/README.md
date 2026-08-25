@@ -67,6 +67,24 @@ consume fixtures without depending on collector internals.
 | Source viewer | `source.file`, `source.function`, `source.line` |
 | Evidence legend | `evidence`, `confidence`, `category`, `label` |
 
+## Requests query API
+
+M1의 Requests 화면은 내부 API가 반환하는 request summary와 detail을 소비한다.
+내부 API는 target app보다 먼저 처리되므로 자기 자신을 tracing event로 남기지 않는다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/requests` | request summary list |
+| `GET /__asyncscope__/api/requests/{request_id}` | request summary와 해당 request events |
+
+List endpoint는 `q`, `status`, `method`, `path`, `sort`, `order`, `page`, `page_size`를
+지원한다. 기본 정렬은 `started_at_ns desc`, 기본 page size는 50, 최대 page size는 200이다.
+
+request summary는 `request_id`, `method`, `path`, `status`, `status_code`,
+`started_at_ns`, `ended_at_ns`, `duration_ns`, `response_started_at_ns`, `event_count`,
+`span_count`, `task_count`, `libraries`, `has_blocking`, `has_unknown_await`를 가진다.
+`request.end`가 아직 없으면 `status: "running"`으로 반환한다.
+
 ## Accuracy boundary
 
 - `observed` means the event came from `sys.monitoring`, ASGI lifecycle, or an

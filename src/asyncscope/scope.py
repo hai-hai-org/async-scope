@@ -21,6 +21,7 @@ from .collector import monitoring
 from .collector import tasks as task_collector
 from .collector.middleware import RequestTracker
 from .storage import EventBuffer, EventBufferSink
+from .web.routes import handle_api
 
 SINK_NAME = "asyncscope.jsonl"
 
@@ -118,6 +119,8 @@ class AsyncScope:
         self._heartbeat = loop_collector.start(self.threshold, self.interval)
 
     async def __call__(self, scope, receive, send):
+        if await handle_api(self.buffer, scope, send):
+            return None
         if self._tracker is None:
             return await self.app(scope, receive, send)
         # import 시점에 install()하면 loop가 없어서 여기서 붙인다.
