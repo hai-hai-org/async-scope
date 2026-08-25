@@ -17,9 +17,9 @@ from typing import Any
 from . import QueryError, filter_values, paginate
 from .recommendations import recommend
 from .requests import group_by_request
-from .spans import blocked_gap, blocked_intervals, time_distribution
+from .spans import blocked_gap, blocked_intervals, build_span_tree, time_distribution
 
-VALID_TYPES = {"blocking", "unattributed"}
+VALID_TYPES = {"blocking", "long_wait", "unattributed"}
 VALID_SEVERITIES = {"low", "medium", "high"}
 
 # heartbeat threshold가 이벤트에 없을 때만 쓰는 값 (collector.loop.DEFAULT_THRESHOLD와 같다).
@@ -29,6 +29,12 @@ FALLBACK_THRESHOLD_NS = 50_000_000
 # 매번 finding이 되면 Analyzer가 쓸모없어진다.
 UNATTRIBUTED_MIN_NS = 10_000_000
 UNATTRIBUTED_MIN_SHARE = 0.2
+
+# 한 span이 이만큼 이상, 그리고 request 구간의 이 비중 이상을 한 await에서 보내면 finding이다.
+# ponytail: 하한 1초는 실측으로 정한 노브다. 50ms sleep은 문제가 아니고 몇 초짜리 대기는
+# 문제다. Settings API가 노출할 후보이며 그때까지는 여기가 유일한 자리다.
+LONG_WAIT_MIN_NS = 1_000_000_000
+LONG_WAIT_MIN_SHARE = 0.5
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2}
 
@@ -93,6 +99,7 @@ def build_findings(
     events = list(events)
     grouped = group_by_request(events)
     findings = _blocking_findings(events, grouped)
+    findings.extend(_long_wait_findings(events, grouped))
     findings.extend(_unattributed_findings(events, grouped))
     for finding in findings:
         finding["recommendation"] = recommend(finding, project_root)
@@ -138,6 +145,74 @@ def _blocking_findings(
             }
         )
     return findings
+
+
+def _long_wait_findings(
+    events: list[dict[str, Any]],
+    grouped: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """request 시간의 대부분을 한 await에서 보낸 경우.
+
+    `loop.blocked`가 없어도 느린 request가 있다. 상대 서비스가 늦으면 loop은 멀쩡하고
+    request만 오래 걸린다. blocking finding과 달리 **후보가 아니라 관측**이다 —
+    suspend/resume을 실제로 봤으므로 어느 프레임이 기다렸는지 안다.
+    """
+    blocked = blocked_intervals(events)
+    findings = []
+
+    for request_id, request_events in grouped.items():
+        distribution = time_distribution(request_events, blocked)
+        measured_ns = distribution["measured_ns"]
+        if measured_ns <= 0:
+            continue
+
+        waiter = _longest_waiter(build_span_tree(request_events))
+        if waiter is None or waiter["wait_ns"] < LONG_WAIT_MIN_NS:
+            continue
+        share = waiter["wait_ns"] / measured_ns
+        if share < LONG_WAIT_MIN_SHARE:
+            continue
+
+        start = next(event for event in request_events if event.get("type") == "request.start")
+        findings.append(
+            {
+                "finding_id": f"long-wait-{request_id}",
+                "type": "long_wait",
+                "severity": _share_severity(share),
+                "title": (
+                    f"{start.get('method')} {start.get('path')}가 "
+                    f"{waiter['wait_ns'] / 1e6:.0f}ms를 한 await에서 기다렸다"
+                ),
+                "evidence": "observed",
+                "confidence": None,
+                "detected_at_ns": start["timestamp_ns"],
+                "duration_ns": waiter["wait_ns"],
+                "threshold_ns": LONG_WAIT_MIN_NS,
+                "suspect": {
+                    "source": waiter["source"],
+                    "label": waiter["label"],
+                    "span_id": waiter["span_id"],
+                    "request_id": request_id,
+                    # blocking과 다르다. 이 프레임이 거기서 기다린 것을 실제로 봤다.
+                    "certainty": "observed",
+                },
+                "affected_requests": [_request_ref(request_events)],
+                "recommendation": None,
+            }
+        )
+    return findings
+
+
+def _longest_waiter(spans: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """가장 오래 기다린 span. 부모의 wait_ns는 자식 대기를 포함하지 않으므로 최댓값이 실제 지점이다."""
+    best = None
+    stack = list(spans)
+    while stack:
+        node = stack.pop()
+        stack.extend(node["children"])
+        if best is None or node["wait_ns"] > best["wait_ns"]:
+            best = node
+    return best
 
 
 def _unattributed_findings(

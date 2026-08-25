@@ -15,7 +15,7 @@ from ..analysis import QueryError
 from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
-from ..config import apply_settings_patch, settings_payload
+from ..config import apply_settings_patch, settings_payload, settings_state
 from ..export import buffer_metadata, export_payload, replay_into
 from ..source import read_snippet
 from .sse import handle_sse
@@ -55,6 +55,10 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     if path == REPLAY_PATH:
         await _handle_replay(app_scope.buffer, method, receive, send)
         return True
+    # /findings/<id>/feedback은 detail 분기(/findings/<id>)보다 먼저 걸러야 한다.
+    if (feedback_id := _feedback_id(path)) is not None:
+        await _handle_feedback(app_scope, feedback_id, method, receive, send)
+        return True
 
     if method != "GET":
         await _json_response(send, 405, {"error": "method_not_allowed"})
@@ -65,14 +69,7 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     if path == REQUESTS_PATH:
         await _guarded(send, lambda: query_requests(buffer.snapshot(), **_request_args(params)))
     elif path == FINDINGS_PATH:
-        await _guarded(
-            send,
-            lambda: query_findings(
-                buffer.snapshot(),
-                project_root=app_scope.project_root,
-                **_finding_args(params),
-            ),
-        )
+        await _guarded(send, lambda: _findings(app_scope, params))
     elif path == EVENTS_PATH:
         await _handle_events(buffer, params, scope, receive, send)
     elif path == SUMMARY_PATH:
@@ -84,10 +81,7 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     elif (request_id := _detail_id(path, REQUESTS_PATH)) is not None:
         await _detail_response(send, get_request_detail(buffer.snapshot(), request_id))
     elif (finding_id := _detail_id(path, FINDINGS_PATH)) is not None:
-        await _detail_response(
-            send,
-            get_finding(buffer.snapshot(), finding_id, project_root=app_scope.project_root),
-        )
+        await _detail_response(send, _finding(app_scope, finding_id))
     else:
         await _json_response(send, 404, {"error": "not_found"})
     return True
@@ -115,6 +109,59 @@ def _finding_args(params: dict[str, list[str]]) -> dict:
         "page": _one(params, "page", "1"),
         "page_size": _one(params, "page_size", "50"),
     }
+
+
+def _findings(app_scope, params: dict[str, list[str]]) -> dict:
+    payload = query_findings(
+        app_scope.buffer.snapshot(),
+        project_root=app_scope.project_root,
+        **_finding_args(params),
+    )
+    feedback = settings_state(app_scope).feedback
+    for finding in payload["items"]:
+        finding["feedback"] = feedback.marks(finding["finding_id"])
+    return payload
+
+
+def _finding(app_scope, finding_id: str) -> dict | None:
+    """analysis는 feedback을 모른다. event만 읽는 계층으로 유지하고 표시는 여기서 얹는다."""
+    finding = get_finding(
+        app_scope.buffer.snapshot(), finding_id, project_root=app_scope.project_root
+    )
+    if finding is None:
+        return None
+    finding["feedback"] = settings_state(app_scope).feedback.marks(finding_id)
+    return finding
+
+
+async def _handle_feedback(app_scope, finding_id: str, method: str, receive, send) -> None:
+    """finding 하나에 사용자 표시를 남긴다. 표시해도 목록에서 걸러내지 않는다 — 숨김은 UI 결정이다."""
+    if method != "POST":
+        await _json_response(send, 405, {"error": "method_not_allowed"})
+        return
+
+    finding = _finding(app_scope, finding_id)
+    if finding is None:
+        await _json_response(send, 404, {"error": "not_found"})
+        return
+
+    try:
+        body = await _json_body(receive)
+        if not isinstance(body, dict):
+            raise QueryError("feedback payload must be an object")
+        settings_state(app_scope).feedback.record(finding_id, body.get("kind"))
+    except QueryError as exc:
+        await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
+        return
+
+    await _json_response(send, 200, _finding(app_scope, finding_id))
+
+
+def _feedback_id(path: str) -> str | None:
+    prefix, suffix = f"{FINDINGS_PATH}/", "/feedback"
+    if not path.startswith(prefix) or not path.endswith(suffix):
+        return None
+    return unquote(path[len(prefix) : -len(suffix)]) or None
 
 
 def _summary(app_scope, params: dict[str, list[str]]) -> dict:

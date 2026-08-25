@@ -4,7 +4,12 @@ import pytest
 
 from asyncscope import AsyncScope
 from asyncscope.analysis import QueryError
-from asyncscope.config import apply_settings_patch, settings_payload, validate_patch
+from asyncscope.config import (
+    FeedbackState,
+    apply_settings_patch,
+    settings_payload,
+    validate_patch,
+)
 
 
 def _app():
@@ -98,3 +103,27 @@ def test_validate_patch_rejects_invalid_values(patch, message):
 def test_validate_patch_rejects_missing_project_root(tmp_path):
     with pytest.raises(QueryError, match="existing directory"):
         validate_patch({"project_root": str(tmp_path / "missing")})
+
+
+def test_feedback_records_both_kinds_and_counts_them():
+    """같은 finding에 두 kind를 다 표시할 수 있다 — 인지했고 오탐이다."""
+    state = FeedbackState()
+    assert state.marks("f1") == {"acknowledged": False, "false_positive": False}
+
+    state.record("f1", "acknowledged")
+    state.record("f1", "false_positive")
+    state.record("f2", "acknowledged")
+
+    assert state.marks("f1") == {"acknowledged": True, "false_positive": True}
+    assert state.marks("f2") == {"acknowledged": True, "false_positive": False}
+    assert state.marks("missing") == {"acknowledged": False, "false_positive": False}
+    assert state.summary() == {"acknowledged": 2, "false_positive": 1}
+
+    # 같은 표시를 두 번 해도 count가 늘지 않는다.
+    state.record("f1", "acknowledged")
+    assert state.summary()["acknowledged"] == 2
+
+
+def test_feedback_rejects_an_unknown_kind():
+    with pytest.raises(QueryError, match="kind must be one of"):
+        FeedbackState().record("f1", "resolved")

@@ -447,3 +447,104 @@ async def test_recommendation_source_opens_through_the_source_api(demo_app):
     assert payload["file"] == step["source"]["file"]
     # recommendation은 span이 아니라 실제 호출 줄을 가리킨다.
     assert any("time.sleep(" in line for line in payload["lines"])
+
+
+async def test_finding_feedback_is_recorded_and_never_hides_the_finding(demo_app):
+    """오탐 표시는 사용자 판단이다. 서버가 목록에서 빼면 UI가 그 결정을 되돌릴 수 없다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+
+            listed = (await client.get("/__asyncscope__/api/findings")).json()
+            finding_id = listed["items"][0]["finding_id"]
+
+            marked = await client.post(
+                f"/__asyncscope__/api/findings/{finding_id}/feedback",
+                json={"kind": "false_positive"},
+            )
+            relisted = (await client.get("/__asyncscope__/api/findings")).json()
+            detail = (
+                await client.get(f"/__asyncscope__/api/findings/{finding_id}")
+            ).json()
+            settings = (await client.get("/__asyncscope__/api/settings")).json()
+    finally:
+        scope.uninstall()
+
+    assert listed["items"][0]["feedback"] == {
+        "acknowledged": False,
+        "false_positive": False,
+    }
+
+    assert marked.status_code == 200
+    assert marked.json()["feedback"] == {"acknowledged": False, "false_positive": True}
+
+    # 표시해도 목록에서 사라지지 않는다. 숨김은 UI 결정이다.
+    assert relisted["total"] == listed["total"]
+    by_id = {item["finding_id"]: item for item in relisted["items"]}
+    assert by_id[finding_id]["feedback"]["false_positive"]
+    assert detail["feedback"]["false_positive"]
+
+    # Settings와 같은 상태를 본다.
+    assert settings["feedback"] == {"acknowledged": 0, "false_positive": 1}
+
+
+async def test_finding_feedback_rejects_bad_input(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+            finding_id = (await client.get("/__asyncscope__/api/findings")).json()[
+                "items"
+            ][0]["finding_id"]
+
+            missing = await client.post(
+                "/__asyncscope__/api/findings/blocking-0/feedback",
+                json={"kind": "acknowledged"},
+            )
+            bad_kind = await client.post(
+                f"/__asyncscope__/api/findings/{finding_id}/feedback",
+                json={"kind": "resolved"},
+            )
+            not_object = await client.post(
+                f"/__asyncscope__/api/findings/{finding_id}/feedback", json=["nope"]
+            )
+            wrong_method = await client.get(
+                f"/__asyncscope__/api/findings/{finding_id}/feedback"
+            )
+    finally:
+        scope.uninstall()
+
+    assert missing.status_code == 404
+    assert bad_kind.status_code == 400
+    assert not_object.status_code == 400
+    assert wrong_method.status_code == 405
+
+
+async def test_long_wait_finding_shows_up_for_a_slow_await(demo_app):
+    """/demo/long-running은 1초를 await한다. loop은 멀쩡하지만 request는 느리다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/long-running")
+            findings = (
+                await client.get(
+                    "/__asyncscope__/api/findings", params={"type": "long_wait"}
+                )
+            ).json()
+    finally:
+        scope.uninstall()
+
+    assert findings["total"] >= 1
+    finding = findings["items"][0]
+    assert finding["evidence"] == "observed"
+    assert finding["suspect"]["certainty"] == "observed"
+    assert finding["recommendation"]["kind"] == "measure"
+    assert finding["affected_requests"][0]["path"] == "/demo/long-running"

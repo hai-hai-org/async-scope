@@ -20,18 +20,31 @@ RESTART_FIELDS = {"buffer_size", "project_root"}
 SETTING_FIELDS = LIVE_FIELDS | RESTART_FIELDS
 
 
+FEEDBACK_KINDS = ("acknowledged", "false_positive")
+
+
 @dataclass
 class FeedbackState:
-    """In-memory feedback counts. Persistence and write endpoints are later work."""
+    """finding에 대한 사용자 표시. process-local이고 재시작하면 사라진다.
+
+    ponytail: buffer에서 밀려난 finding id가 집합에 남는다. 메모리에만 있고 작아서 지금은
+    문제되지 않는다. 디스크에 persist하게 되면 정리 정책이 필요하다.
+    """
 
     acknowledged: set[str] = field(default_factory=set)
     false_positive: set[str] = field(default_factory=set)
 
+    def record(self, finding_id: str, kind: str) -> None:
+        """같은 finding에 두 kind를 다 표시할 수 있다 — 인지했고 오탐이다."""
+        if kind not in FEEDBACK_KINDS:
+            raise QueryError(f"kind must be one of {sorted(FEEDBACK_KINDS)}")
+        getattr(self, kind).add(finding_id)
+
+    def marks(self, finding_id: str) -> dict[str, bool]:
+        return {kind: finding_id in getattr(self, kind) for kind in FEEDBACK_KINDS}
+
     def summary(self) -> dict[str, int]:
-        return {
-            "acknowledged": len(self.acknowledged),
-            "false_positive": len(self.false_positive),
-        }
+        return {kind: len(getattr(self, kind)) for kind in FEEDBACK_KINDS}
 
 
 @dataclass
@@ -45,7 +58,7 @@ class SettingsState:
 def settings_payload(app_scope) -> dict[str, Any]:
     """Return the shape consumed by Settings UI."""
 
-    state = _settings_state(app_scope)
+    state = settings_state(app_scope)
     return {
         "tracing": app_scope.installed,
         "persisted": False,
@@ -76,7 +89,7 @@ def apply_settings_patch(app_scope, patch: dict[str, Any]) -> dict[str, Any]:
         raise QueryError(f"unsupported setting: {sorted(unknown)}")
 
     updates = validate_patch(patch)
-    state = _settings_state(app_scope)
+    state = settings_state(app_scope)
 
     if "threshold_s" in updates:
         app_scope.threshold = updates["threshold_s"]
@@ -147,7 +160,7 @@ def limits() -> dict[str, Any]:
     }
 
 
-def _settings_state(app_scope) -> SettingsState:
+def settings_state(app_scope) -> SettingsState:
     state = getattr(app_scope, "settings_state", None)
     if state is None:
         state = SettingsState()

@@ -289,15 +289,74 @@ request query다. `page`, `page_size` 규칙은 Requests와 같다. 정렬은 se
 
 finding은 `finding_id`, `type`, `severity`, `title`, `evidence`, `confidence`,
 `detected_at_ns`, `duration_ns`, `threshold_ns`, `suspect`, `affected_requests`,
-`recommendation`을 가진다.
+`recommendation`, `feedback`을 가진다.
 
 | `type` | 파생 소스 | `finding_id` | severity |
 | --- | --- | --- | --- |
 | `blocking` | `loop.blocked` 하나 | `blocking-<timestamp_ns>` | 지연이 threshold의 10배 이상 high, 3배 이상 medium |
+| `long_wait` | 한 span의 `wait_ns` | `long-wait-<request_id>` | 비중 50% 이상 high, 30% 이상 medium |
 | `unattributed` | 설명되지 않은 request 구간 | `unattributed-<request_id>` | 비중 50% 이상 high, 30% 이상 medium |
 
 `unattributed`는 설명 못 한 시간이 10ms 이상이고 비중이 20% 이상일 때만 올린다. 짧은
 request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진다.
+
+`long_wait`은 한 span의 `wait_ns`가 **1초 이상이고 request 구간의 절반 이상**일 때 올린다.
+`loop.blocked`가 없어도 느린 request가 있다 — 상대 서비스가 늦으면 loop은 멀쩡하고 request만
+오래 걸린다. 부모 span의 `wait_ns`는 자식 대기를 포함하지 않으므로(suspend→resume 짝만 센다)
+최댓값이 실제로 기다린 지점이다.
+
+`DESIGN.md` AnalyzerFinding variants의 `hot coroutine`은 만들지 않았다. "CPU를 많이 쓰는
+coroutine"을 지금 수집으로 구분할 신호가 없다. CPU sampling 없이 만들면 추측이다.
+
+### `suspect.certainty`
+
+| 값 | 어느 finding | 뜻 |
+| --- | --- | --- |
+| `candidate` | `blocking` | heartbeat sampling이다. 침묵 구간 직전 프레임을 후보로 제시할 뿐이다 |
+| `observed` | `long_wait` | suspend/resume을 실제로 봤다. 그 프레임이 거기서 기다린 것이 사실이다 |
+
+**이 구분이 "낮은 신뢰도는 추론임을 먼저 표시한다"의 근거다.** `evidence`도 같이 갈린다 —
+`blocking`은 `inferred`(confidence 0.6), `long_wait`은 `observed`(confidence `null`)다.
+UI는 `candidate`를 단정하는 문구로 쓰지 않는다.
+
+### `feedback`
+
+```json
+"feedback": { "acknowledged": false, "false_positive": false }
+```
+
+사용자가 남긴 표시다. `analysis`는 이 값을 모르고 `web/routes.py`가 응답에 얹는다 —
+분석 계층은 event만 읽는다.
+
+**서버는 표시된 finding을 목록에서 걸러내지 않는다.** 무엇을 숨길지는 UI 결정이다
+(`DESIGN.md` AnalyzerFinding States의 `filtered`). 오탐 표시를 서버가 곧 숨김으로 해석하면
+사용자가 그 결정을 되돌릴 방법이 없어진다.
+
+### Feedback API
+
+| Endpoint | Meaning |
+| --- | --- |
+| `POST /__asyncscope__/api/findings/{finding_id}/feedback` | finding 하나에 표시를 남긴다 |
+
+body는 `{"kind": "acknowledged"}` 또는 `{"kind": "false_positive"}`다. 같은 finding에 둘 다
+표시할 수 있다 — 인지했고 오탐이다. 성공하면 표시가 얹힌 finding을 돌려준다.
+
+없는 `finding_id`는 `404`, 알 수 없는 `kind`나 object가 아닌 body는 `400`, `POST`가 아닌
+method는 `405`다.
+
+**process-local이고 재시작하면 사라진다.** `GET /api/settings`의 `feedback` count가 같은
+상태를 본다. buffer에서 밀려난 finding id는 집합에 남지만 메모리에만 있어 지금은 문제되지
+않는다.
+
+### false-positive와 no-recommendation 사례
+
+`ui-stress.json`이 둘 다 담고 있다. UI가 그 상태를 그려 볼 수 있다.
+
+- **false-positive**: 그 fixture의 `loop.blocked`가 겹치는 request 5개를
+  `affected_requests`로 잡는다. 최대 하나만 원인이고 나머지는 부수 피해다.
+  `suspect.certainty: "candidate"`가 정확히 그 뜻이다
+- **no-recommendation**: 같은 finding의 `suspect.source`가 저장소에 없는 파일을 가리키므로
+  소스를 읽을 수 없고 `recommendation.kind`가 `measure`로 떨어진다
 
 `suspect`는 침묵 구간 **시작 직전**에 마지막으로 실행된 프로젝트 프레임이며 항상
 `certainty: "candidate"`다. heartbeat가 깨어난 시점의 마지막 coroutine을 쓰면 지연이 끝난

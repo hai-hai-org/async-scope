@@ -29,6 +29,11 @@ MEASURE_STEPS = {
         "threshold를 낮춰 다시 측정한다. 짧고 잦은 지연은 지금 값을 넘지 못했을 수 있다.",
         "같은 시각의 다른 request와 대조해 이 request 고유 문제인지 확인한다.",
     ],
+    "long_wait": [
+        "label로 무엇을 기다렸는지 확인한다. `unknown await`면 adapter 미지원이라 대상을 모른다.",
+        "상대 서비스나 쿼리의 응답 시간을 그쪽에서 따로 측정한다. 여기서는 기다린 시간만 안다.",
+        "timeout을 걸어 무한 대기를 막는다. 지금은 상대가 응답할 때까지 request가 살아 있다.",
+    ],
     "unattributed": [
         "project root 설정을 확인한다. 프로젝트 밖 코드(framework, driver)가 돈 시간은 수집되지 않는다.",
         "buffer 상한을 늘려 request 앞부분이 밀려나지 않았는지 확인한다.",
