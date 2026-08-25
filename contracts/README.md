@@ -383,8 +383,23 @@ Settings 패널이 소비한다. 지금 단계의 설정은 모두 process-local
 | Unsupported await fallback | `unknown-await.json` | done |
 | Background Task complete/cancel | `background-task.json` | demo + fixture |
 | Failure and request cancellation | `failure-cancel.json` | demo + fixture |
-| Supported adapter labels | `adapter-awaits.json` | fixture-only |
-| Client disconnect | `disconnect.json` | fixture-only |
+| Supported adapter labels | `adapter-awaits.json` | verified (stubbed entry point) |
+| Client disconnect | `disconnect.json` | verified (pure ASGI) |
+
+`demo + fixture`는 demo route를 돌린 실제 수집이 fixture 값을 낸다는 뜻이다.
+`tests/e2e/test_demo.py`가 demo route 9개를 한 번에 돌려 수집 결과 전체에 fixture와 같은
+검사(`assert_normalized`)를 건다.
+
+마지막 두 줄은 실제 상대 서버 없이 수집 경로만 통과시켜 검증했다.
+
+- **adapter**: `awaits.install()`은 `vars(owner)`에 있는 메서드를 감싸므로, 진입점에 async
+  stub을 꽂으면 wrapper가 그 stub을 감싼다. 프로젝트 coroutine에서 호출하면 collector가
+  실제로 `library`, `label`, `evidence: "observed"`를 붙인 `coroutine.suspend`를 낸다
+  (`tests/unit/test_classifiers.py`). 가짜인 건 DB·Redis·WebSocket 서버뿐이다.
+  **실제 서버를 상대로 한 통합 검증은 아직 없다.**
+- **disconnect**: 아래 "알려진 경계"대로 uvicorn HTTP에서는 재현되지 않는다. `RequestTracker`가
+  순수 ASGI이므로 `http.response.start`를 보내지 않고 끝나는 app을 직접 호출해
+  `status: "disconnected"`를 end-to-end로 확인한다 (`tests/test_install.py`).
 
 M1 must still implement adapter classifiers and API/query behavior against this
 contract.
@@ -486,8 +501,10 @@ collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자
   없다. `failure-cancel.json`의 `category: "failed"`, `"cancelled"`는 `PY_UNWIND`/`PY_THROW`를
   수집한 뒤에 만들 수 있다.
 - uvicorn HTTP에서 client가 연결을 끊어도 handler는 끝까지 실행되고 응답을 보낸다. 그래서
-  `status_code`가 `None`이 되는 경로가 실제로는 없고 `disconnected`도 나오지 않는다. 판정
-  규칙(`middleware.outcome`)은 단위 테스트로 고정해 두었다.
+  `status_code`가 `None`이 되는 경로가 실제 서버에서는 나오지 않는다. `RequestTracker`는
+  순수 ASGI라 응답을 시작하지 않고 끝나는 app에서는 `disconnected`가 실제로 나오며, 그
+  경로를 end-to-end 테스트로 고정해 뒀다. 소비자는 이 상태를 그려야 하지만 uvicorn HTTP
+  배포에서는 거의 보지 못한다.
 - `task.*` 이벤트는 프로젝트 코드 coroutine으로 만든 Task만 낸다. uvicorn 내부 Task와
   asyncscope 자신의 heartbeat는 이벤트를 만들지 않지만 `task_id`는 받으므로, 소비자는
   스트림에 없는 `parent_task_id`를 만날 수 있다. request 연결은 `request_id`로 한다.

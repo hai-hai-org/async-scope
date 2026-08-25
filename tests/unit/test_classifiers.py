@@ -4,8 +4,11 @@
 도는 남의 suspend까지 같은 label을 받는다. 그래서 호출자의 span과 대조한다.
 """
 
+import asyncio
+import contextlib
 import importlib
 import inspect
+import json
 import warnings
 from pathlib import Path
 
@@ -153,3 +156,87 @@ def test_known_blocking_paths_resolve(dotted):
 
     label, alternative = blocking.KNOWN_BLOCKING[dotted]
     assert label and alternative, dotted
+
+
+@contextlib.contextmanager
+def _stubbed_entry_point(module_name, class_name, method_name):
+    """진입점을 async stub으로 바꾼다.
+
+    실제 DB·Redis·WebSocket 서버 없이 수집 경로를 통과시키려는 것이다. 가짜인 건 상대편
+    서버뿐이고, awaits.install()이 감싸는 것도 monitoring이 기록하는 것도 실제 코드다.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            module = importlib.import_module(module_name)
+    except ImportError:
+        pytest.skip(f"{module_name} 미설치")
+
+    owner = getattr(module, class_name, None)
+    if owner is None or method_name not in vars(owner):
+        pytest.skip(f"{module_name}.{class_name}.{method_name} 없음")
+
+    original = vars(owner)[method_name]
+
+    async def stub(self, *args, **kwargs):
+        await asyncio.sleep(0)  # 실제 adapter처럼 loop에 한 번 양보한다
+        return "stub"
+
+    setattr(owner, method_name, stub)
+    try:
+        yield owner
+    finally:
+        setattr(owner, method_name, original)
+
+
+@pytest.mark.parametrize(
+    ("module_name", "class_name", "method_name", "library", "label"),
+    awaits.ADAPTERS,
+    ids=[f"{row[0]}.{row[2]}" for row in awaits.ADAPTERS],
+)
+async def test_adapter_entry_point_actually_emits_its_label(
+    module_name, class_name, method_name, library, label
+):
+    """contracts/fixtures/adapter-awaits.json이 약속한 값을 collector가 실제로 낸다.
+
+    진입점이 존재하는지는 test_each_library_has_a_live_entry_point가 본다. 여기서는
+    그래서 label이 실제로 붙는지를 본다.
+    """
+    with _stubbed_entry_point(module_name, class_name, method_name) as owner:
+
+        async def adapter_caller():
+            """adapter를 직접 await하는 프로젝트 coroutine. 이 프레임만 labeled여야 한다."""
+            # 실제 인스턴스를 만들면 반쯤 초기화된 Connection의 __del__이 시끄럽다.
+            # wrapper는 self를 보지 않으므로 None이면 충분하다.
+            return await getattr(owner, method_name)(None)
+
+        with tracing(ROOT) as rows:
+            awaits.install()
+            try:
+                assert await adapter_caller() == "stub"
+            finally:
+                awaits.uninstall()
+
+    labeled = _suspends(rows, "adapter_caller")
+    assert labeled, f"{library} 호출 프레임의 suspend가 수집되지 않았다"
+    for row in labeled:
+        assert row["library"] == library, row
+        assert row["label"] == label, row
+        assert row["evidence"] == "observed", row
+        assert row["confidence"] is None, row
+
+
+def test_adapter_fixture_matches_the_registry():
+    """fixture와 registry가 어긋나면 UI가 collector가 내지 않는 label을 기다린다."""
+    fixture = json.loads(
+        (ROOT / "contracts" / "fixtures" / "adapter-awaits.json").read_text()
+    )
+    registry = {row[3]: row[4] for row in awaits.ADAPTERS}
+
+    labeled = {
+        event["library"]: event["label"]
+        for event in fixture["events"]
+        if event.get("library") is not None
+    }
+    assert labeled, "adapter fixture에 labeled suspend가 없다"
+    assert labeled == {library: registry[library] for library in labeled}
