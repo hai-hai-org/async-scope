@@ -41,6 +41,38 @@ Event-specific fields such as `method`, `path`, `status_code`, `category`,
 `outcome`, and `disconnect_reason` remain top-level fields so the dashboard can
 consume fixtures without depending on collector internals.
 
+### `source`
+
+`{"file": ..., "function": ..., "line": ...}` 또는 `null`이다. Timeline segment에서
+Execution Flow의 span으로, 다시 SourceViewer로 이어지는 링크가 이 필드 하나로 만들어진다.
+`GET /__asyncscope__/api/source?file=&line=`에 그대로 넘기면 된다.
+
+**`line`은 `def` 줄이 아닐 수 있다.** `code.co_firstlineno`를 그대로 쓰는데, CPython은
+decorator가 붙은 함수의 `co_firstlineno`를 **첫 decorator 줄**로 준다.
+
+```python
+58  @app.get("/demo/blocking")      # ← source.line
+59  async def blocking():
+60      time.sleep(0.3)
+```
+
+런타임이 주는 값을 바꾸지 않는다 — 바꾸면 collector가 CPython과 다른 말을 하게 된다.
+**SourceViewer가 `line`만 하이라이트하면 사용자는 decorator를 보게 된다.** `def` 줄을
+강조하려면 snippet 안에서 찾는다. `read_snippet`의 기본 `radius=5`면 decorator가 여러 개
+붙어도 들어오고, 모자라면 `radius`를 키워 다시 부르면 된다.
+
+`file`은 언제나 project root 상대 경로다. 절대 경로는 어떤 응답에도 나가지 않는다.
+
+`source`가 `null`인 이벤트가 있다. 링크할 대상이 없으므로 소비자는 `missing source`
+상태로 그린다.
+
+| `source: null`인 경우 | 이유 |
+| --- | --- |
+| `request.*`, `response.*`, `loop.blocked` | 특정 프레임의 이벤트가 아니다 |
+| project root 밖 프레임 | framework·driver·표준 라이브러리는 수집하지 않는다 |
+
+`ui-stress.json`의 `req-disconnected`가 `source: null`인 `coroutine.suspend` 사례다.
+
 ## Transport buffer metadata
 
 `EventBuffer`는 bounded ring buffer다. 저장 시 `sequence`를 단조 증가 값으로 붙이고,
