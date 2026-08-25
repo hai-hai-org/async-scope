@@ -112,3 +112,19 @@ def _blocked(timestamp_ns: int, delay_ns: int) -> dict:
 def test_summarize_rejects_unusable_windows(window, message):
     with pytest.raises(QueryError, match=message):
         summarize(_events("blocking"), now_ns=2_400_000_000, window_s=window)
+
+
+def test_blocked_gap_length_equals_the_measured_delay():
+    """gap 구간 길이가 delay_ns와 어긋나면 metric과 finding이 이벤트와 다른 값을 말한다.
+
+    collector는 gap_start_ns를 emit()이 timestamp_ns를 찍기 직전에 읽는다. 그 사이 몇 µs가
+    구간에 섞이면 안 된다.
+    """
+    from asyncscope.analysis.spans import blocked_gap
+
+    event = _blocked(2_300_000_000, 300_000_000)
+    event["gap_start_ns"] = 2_000_000_000  # timestamp - delay 보다 조금 이르게 읽힌 값
+
+    start, stop = blocked_gap(event)
+    assert stop - start == event["delay_ns"]
+    assert start == 2_000_000_000

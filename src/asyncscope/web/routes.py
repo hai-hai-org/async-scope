@@ -120,8 +120,8 @@ def _finding_args(params: dict[str, list[str]]) -> dict:
 def _summary(app_scope, params: dict[str, list[str]]) -> dict:
     """metrics 계산은 analysis가, 벽시계와 buffer 상태는 여기가 담당한다.
 
-    `stale`은 서버가 판정하지 않는다. 응답은 항상 방금 계산한 값이고, poll 실패나 SSE
-    끊김은 client만 안다. 서버는 tracing이 켜져 있는지만 알려 준다.
+    `stale`, `paused`, `disconnected`는 서버가 판정하지 않는다. 응답은 항상 방금 계산한
+    값이고, poll 실패나 SSE 끊김은 client만 안다. 서버는 자기가 아는 상태만 알려 준다.
     """
     buffer = app_scope.buffer
     payload = summarize(
@@ -132,7 +132,8 @@ def _summary(app_scope, params: dict[str, list[str]]) -> dict:
     return {
         # 이벤트의 timestamp_ns는 perf_counter_ns라 벽시계가 아니다. 둘을 섞지 않는다.
         "server_time": datetime.now(UTC).isoformat(),
-        "tracing": app_scope.installed,
+        "status": app_scope.status,
+        "status_reason": app_scope.status_reason,
         **payload,
         "buffer": {
             "events": len(buffer),

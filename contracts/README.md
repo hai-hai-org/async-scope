@@ -294,7 +294,8 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
 ```json
 {
   "server_time": "2026-08-25T05:31:02.160451+00:00",
-  "tracing": true,
+  "status": "running",
+  "status_reason": null,
   "window_ns": 60000000000,
   "measured_window_ns": 405468125,
   "request_rate_per_second": 4.933,
@@ -325,9 +326,31 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
 - `active_requests`는 window로 자르지 않는다. window 전에 시작해 아직 도는 request가
   빠지면 안 된다.
 - `buffer` 블록의 필드 이름은 SSE `asyncscope.gap` payload와 같다.
-- `tracing`은 `install()` 여부다. `stale`은 서버가 판정하지 않는다 — 응답은 항상 방금
-  계산한 값이고, poll 실패나 SSE 끊김은 client만 안다. UI는 `tracing: false`를
-  `unavailable`로, 자기 연결 상태를 `stale`로 그린다.
+- `loop_delay`와 finding의 blocking 구간 길이는 이벤트의 `delay_ns`와 정확히 같다.
+  `gap_start_ns`는 `emit()`이 `timestamp_ns`를 찍기 직전에 읽은 값이라, `timestamp_ns`까지를
+  구간 끝으로 쓰면 emit 자신의 몇 µs가 loop 지연에 섞인다.
+
+### AppShell 상태
+
+`DESIGN.md` AppShell States는 `running`, `paused`, `disconnected`, `unsupported` 넷인데
+서버가 아는 건 둘뿐이다.
+
+| 상태 | 누가 판정하나 | 근거 |
+| --- | --- | --- |
+| `running` | **서버** (`status`) | `install()`이 끝나 수집 중이다 |
+| `off` | **서버** (`status`) | AsyncScope는 붙었지만 `install()`이 안 됐다 |
+| `unsupported` | **서버** (`status` + `status_reason`) | CPython이 아니거나 3.12 미만이다 |
+| `paused` | **client** | pause는 수집이 아니라 렌더링을 멈춘다. TimelineToolbar의 "buffered count"가 그 증거다 — 멈춘 동안에도 이벤트는 계속 쌓인다 |
+| `disconnected` | **client** | 자기 SSE 연결 상태다. 서버는 client가 끊긴 걸 알 수 없다 |
+
+`stale`도 서버가 판정하지 않는다. 응답은 항상 방금 계산한 값이고, poll 실패나 SSE 끊김은
+client만 안다. `status_reason`은 `unsupported`일 때만 문자열이고 나머지는 `null`이다.
+
+`off`는 DESIGN의 네 상태에 없다. UI는 `unsupported`와 같은 자리에 다른 문구로 그리면 된다 —
+"이 런타임에서는 동작하지 않는다"와 "아직 켜지 않았다"는 사용자가 할 일이 다르다.
+
+client 상태를 그리는 데 필요한 입력은 이미 나가고 있다. pause 중 buffered count는
+`buffer.last_sequence`와 SSE event id의 차이로 구한다.
 
 ## Settings API
 

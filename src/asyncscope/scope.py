@@ -76,6 +76,23 @@ class AsyncScope:
     def events(self) -> list[dict]:
         return self.buffer.snapshot()
 
+    @property
+    def status(self) -> str:
+        """AppShell이 그릴 상태. `running` | `off` | `unsupported`.
+
+        `DESIGN.md` AppShell States는 넷이지만 `paused`와 `disconnected`는 서버가 알 수
+        없다. pause는 수집이 아니라 렌더링을 멈추는 것이고(TimelineToolbar의 "buffered
+        count"가 그 증거다), SSE 연결이 끊긴 건 client만 안다. 모르는 걸 지어내지 않는다.
+        """
+        if unsupported_reason(sys.version_info, sys.implementation.name):
+            return "unsupported"
+        return "running" if self.installed else "off"
+
+    @property
+    def status_reason(self) -> str | None:
+        """`unsupported`일 때 사람이 읽는 원인. 나머지는 None."""
+        return unsupported_reason(sys.version_info, sys.implementation.name)
+
     def install(self):
         """tracing을 켜고 ASGI app으로 쓸 self를 반환한다."""
         if self.installed:
