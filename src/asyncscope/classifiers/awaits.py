@@ -36,6 +36,19 @@ ADAPTERS = (
     ),
 )
 
+# library -> 진입점 이름을 확인한 최소 version. 상한은 두지 않는다 — 적어 두면 새 version이
+# 나올 때마다 거짓이 된다. 하한 미만이 설치되면 진입점 이름이 다를 수 있고, 그때 label이
+# 조용히 안 붙는다 (unknown await로 남을 뿐 오탐은 아니다).
+#
+# runtime에서 검사하지 않는다. 남의 앱 시작 비용과 로그를 늘리지 않는다. 계약은 문서와
+# tests/unit/test_classifiers.py가 고정한다.
+SUPPORTED_VERSIONS = {
+    "asyncpg": "0.30",
+    "httpx": "0.27",
+    "redis.asyncio": "5.0",
+    "websockets": "13.0",
+}
+
 _patched: list[tuple[type, str, object]] = []
 
 
