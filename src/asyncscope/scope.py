@@ -15,6 +15,7 @@ import asyncio
 import sys
 from pathlib import Path
 
+from .classifiers import awaits
 from .collector import loop as loop_collector
 from .collector import monitoring
 from .collector import tasks as task_collector
@@ -84,6 +85,7 @@ class AsyncScope:
             self._out = EventBufferSink(self.buffer)
             self._default_sink = True
         monitoring.start(self.project_root, self._out)
+        awaits.install()
         self._tracker = RequestTracker(self.app)
         self._attach_to_loop()
         return self
@@ -97,6 +99,7 @@ class AsyncScope:
             self._heartbeat.cancel()
             self._heartbeat = None
         task_collector.stop()
+        awaits.uninstall()
         monitoring.stop()
         self._tracker = None
         if self._default_sink:
