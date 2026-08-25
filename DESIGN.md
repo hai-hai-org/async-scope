@@ -2,6 +2,7 @@
 
 - 상태: 구현 계약
 - 작성일: 2026-08-18
+- Day12 구현 상태: CSS custom properties와 primitive showcase로 반영
 - 기준 화면: [AsyncScope dashboard reference](docs/assets/asyncscope-dashboard-reference.png)
 - 관련 문서: [제품·아키텍처 ADR](docs/adr/0001-asyncscope-product-and-architecture.md), [개발 계획](docs/development-plan.md), [구현 일정](docs/implementation-schedule.md)
 
@@ -12,6 +13,13 @@
 - UI/UX DB: `dark developer observability dashboard navy blue amber red Korean code`와 `Korean developer dashboard monospace code readable dark mode`를 조회했다. OLED dark dashboard와 Mono+Sans 조합을 확인하되, 한글 가독성과 오프라인 실행을 위해 Noto Sans KR + JetBrains Mono 계열을 선택했다.
 - Interaction references: beui.dev의 `shared-layout-bg`, `switch`, `drawer`, `table` 실제 소스를 확인했다. 이동 pill, switch thumb, drawer의 focus/escape 처리, 대량 row virtualization 메커니즘만 참고한다.
 - Skipped research: Lazyweb와 Imagen draft는 생략했다. 사용자가 제공한 정적 화면이 이미 구체적인 reference-fidelity 계약이므로 새로운 시각 방향을 만들지 않는다.
+
+### Day12 implementation note
+
+- Token source of truth는 CSS custom properties다. product screen은 임의 색상·간격을 만들지 않고 token을 재사용한다.
+- UI library는 Radix Primitives를 제한적으로 쓴다. Switch와 Drawer/Dialog처럼 keyboard, focus return, Escape 처리가 중요한 primitive만 Radix에 맡기고, Button, Panel, Table, badge는 AsyncScope token으로 직접 구현한다.
+- font는 현재 system fallback stack으로 동작한다. 외부 font request는 만들지 않는다. WOFF2 bundling은 실제 font asset이 확정될 때 별도 작업으로 처리한다.
+- icon은 초기 단계에서 text glyph를 사용한다. 상태 의미는 color만 쓰지 않고 label, glyph, border style을 함께 사용한다.
 
 ## 1. Atmosphere & Identity
 
