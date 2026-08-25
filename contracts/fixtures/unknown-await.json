@@ -90,6 +90,21 @@
       "label": "unknown_await()"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 3053500000,
+      "request_id": "req-unknown",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 3054000000,
       "request_id": "req-unknown",
@@ -100,7 +115,8 @@
       "duration_ns": 54000000,
       "evidence": "observed",
       "confidence": null,
-      "status_code": 200
+      "status_code": 200,
+      "status": "completed"
     }
   ]
 }

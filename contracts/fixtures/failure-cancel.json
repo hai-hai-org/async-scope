@@ -53,6 +53,21 @@
       "label": "handler failed"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 5002500000,
+      "request_id": "req-failure",
+      "task_id": "Task-failure",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 500,
+      "category": "response",
+      "label": "HTTP 500"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 5003000000,
       "request_id": "req-failure",

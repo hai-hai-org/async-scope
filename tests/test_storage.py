@@ -17,6 +17,9 @@ def test_event_buffer_assigns_sequence_and_preserves_order():
 
     assert [event["type"] for event in buffer.snapshot()] == ["one", "two"]
     assert [event["sequence"] for event in buffer.snapshot()] == [1, 2]
+    assert buffer.first_sequence == 1
+    assert buffer.last_sequence == 2
+    assert buffer.dropped_count == 0
 
 
 def test_event_buffer_drops_oldest_when_full():
@@ -28,6 +31,9 @@ def test_event_buffer_drops_oldest_when_full():
 
     assert [event["type"] for event in buffer.snapshot()] == ["two", "three"]
     assert [event["sequence"] for event in buffer.snapshot()] == [2, 3]
+    assert buffer.first_sequence == 2
+    assert buffer.last_sequence == 3
+    assert buffer.dropped_count == 1
 
 
 def test_event_buffer_since_returns_events_after_cursor():
@@ -49,6 +55,10 @@ def test_event_buffer_since_old_cursor_returns_remaining_events():
     buffer.append(_event("three"))
 
     assert [event["type"] for event in buffer.since(0)] == ["two", "three"]
+    assert buffer.cursor_was_dropped(0)
+    assert not buffer.cursor_was_dropped(1)
+    assert not buffer.cursor_was_dropped(3)
+    assert not buffer.cursor_was_dropped(None)
 
 
 def test_event_buffer_clear_keeps_sequence_monotonic():
@@ -56,11 +66,15 @@ def test_event_buffer_clear_keeps_sequence_monotonic():
 
     buffer.append(_event("one"))
     buffer.clear()
+    assert buffer.first_sequence is None
+    assert buffer.last_sequence is None
     sequence = buffer.append(_event("two"))
 
     assert len(buffer) == 1
     assert sequence == 2
     assert buffer.snapshot()[0]["sequence"] == 2
+    assert buffer.first_sequence == 2
+    assert buffer.last_sequence == 2
 
 
 def test_event_buffer_snapshot_does_not_expose_internal_event_dicts():
@@ -100,4 +114,17 @@ def test_event_buffer_sink_drops_invalid_input_without_raising():
 
     assert [event["type"] for event in buffer.snapshot()] == ["valid"]
     assert sink.invalid_count == 2
-    assert sink.dropped_count == 2
+    assert sink.dropped_count == 0
+
+
+def test_event_buffer_sink_reports_overflow_drops_separately_from_invalid_input():
+    buffer = EventBuffer(max_events=1)
+    sink = EventBufferSink(buffer)
+
+    sink.write("not-json\n")
+    sink.write(json.dumps(_event("one")) + "\n")
+    sink.write(json.dumps(_event("two")) + "\n")
+
+    assert [event["type"] for event in buffer.snapshot()] == ["two"]
+    assert sink.invalid_count == 1
+    assert sink.dropped_count == 1
