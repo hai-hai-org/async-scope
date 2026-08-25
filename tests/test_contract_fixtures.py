@@ -21,6 +21,7 @@ COMMON_FIELDS = {
 }
 EVENT_TYPES = {
     "request.start",
+    "response.start",
     "request.end",
     "task.start",
     "task.end",

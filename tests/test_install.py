@@ -99,6 +99,48 @@ async def test_uninstalled_default_buffer_stops_growing(demo_app):
     assert len(scope.events) == before, "tracing을 끈 뒤에도 buffer가 증가했다"
 
 
+async def test_response_start_sits_between_request_start_and_end(demo_app):
+    """Timeline의 Response 구간 시작점. request.end만으로는 알 수 없다."""
+    out = io.StringIO()
+    traced = AsyncScope(demo_app, project_root=ROOT, out=out).install()
+    try:
+        response = await _get(traced, "/demo/quick")
+    finally:
+        traced.uninstall()
+
+    assert response.status_code == 200
+    lifecycle = [
+        row for row in _rows(out)
+        if row["type"] in {"request.start", "response.start", "request.end"}
+    ]
+    assert [row["type"] for row in lifecycle] == [
+        "request.start", "response.start", "request.end",
+    ], lifecycle
+    started, responded, ended = lifecycle
+    assert responded["status_code"] == 200
+    assert responded["category"] == "response"
+    assert started["timestamp_ns"] <= responded["timestamp_ns"] <= ended["timestamp_ns"]
+    assert responded["request_id"] == started["request_id"]
+
+
+async def test_error_response_still_has_response_start(demo_app):
+    """500도 응답은 나간다. request.end가 failed여도 Response 구간은 존재한다."""
+    out = io.StringIO()
+    traced = AsyncScope(demo_app, project_root=ROOT, out=out).install()
+    try:
+        response = await _get(traced, "/demo/failure")
+    finally:
+        traced.uninstall()
+
+    assert response.status_code == 500
+    rows = _rows(out)
+    responded = [row for row in rows if row["type"] == "response.start"]
+    assert [row["status_code"] for row in responded] == [500], responded
+    assert responded[0]["label"] == "HTTP 500"
+    ended = [row for row in rows if row["type"] == "request.end"]
+    assert [row["status"] for row in ended] == ["failed"], ended
+
+
 async def test_install_twice_fails(demo_app):
     traced = AsyncScope(demo_app, project_root=ROOT, out=io.StringIO()).install()
     try:
