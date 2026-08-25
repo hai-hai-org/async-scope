@@ -534,8 +534,16 @@ Settings 패널이 소비한다. 지금 단계의 설정은 모두 process-local
 - `buffer_size`, `project_root`는 restart-required 설정이다. 실행 중인 buffer와 collector
   범위는 바꾸지 않고 `pending_restart`에만 저장한다. 현재 값과 같은 값으로 다시 보내면
   pending에서 제거한다.
-- `persisted: false`는 이번 단계에서 의도된 상태다. 디스크 저장, 사용자별 profile,
-  feedback write endpoint는 별도 이슈에서 다룬다.
+- `persisted: false`는 이번 단계에서 의도된 상태다. 디스크 저장과 사용자별 profile은
+  별도 이슈에서 다룬다.
+- **pending `project_root`는 live source sandbox를 넓히지 않는다.** `GET /api/source`의
+  경계는 실행 중인 `project_root`이고 `PATCH`로 바꿀 수 없다. 재시작해야 적용되며 재시작은
+  실행하는 사람의 설정이다. 테스트가 이 무해함을 고정한다.
+- **그건 `persisted: false`인 동안만 그렇다.** 설정을 디스크에 저장하게 되면 pending
+  `project_root`가 곧 다음 실행의 sandbox가 된다. 지금 validation은 존재하는 디렉터리인지만
+  보므로 `/`도 통과한다 — persist를 붙일 때 "너무 넓은 경로" 상한을 같이 정해야 한다.
+- **`limits`가 form validation의 유일한 출처다.** 서버가 실제로 거부하는 경계와 같은 값이며
+  테스트가 둘을 대조한다. UI는 `limits`만 보고 form을 만들면 된다.
 - `feedback`은 현재 in-memory 요약 count만 제공한다. finding acknowledge/false-positive
   쓰기 API는 아직 없다.
 - 알 수 없는 필드, 잘못된 타입, 범위를 벗어난 값, 존재하지 않는 `project_root`는
