@@ -5,9 +5,12 @@
 
 import asyncio
 import contextlib
+import functools
+import inspect
 from pathlib import Path
 
 from asyncscope.collector.monitoring import tracing
+from asyncscope.source import read_snippet
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -39,6 +42,22 @@ async def parent_of_boom():
     with contextlib.suppress(ValueError):
         await boom()
     return await sibling()
+
+
+def _passthrough(fn):
+    """아무것도 하지 않는 decorator. co_firstlineno가 어디를 가리키는지 보려는 것뿐이다."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        return await fn(*args, **kwargs)
+
+    return wrapper
+
+
+@_passthrough
+async def decorated():
+    await asyncio.sleep(0)
+    return "decorated"
 
 
 def _by(rows, event_type, function):
@@ -112,3 +131,67 @@ async def test_exception_does_not_corrupt_the_sibling_parent():
     caller = _span_of(rows, "parent_of_boom")
     assert _by(rows, "coroutine.start", "boom")[0]["parent_span_id"] == caller
     assert _by(rows, "coroutine.start", "sibling")[0]["parent_span_id"] == caller
+
+
+# --- segment → span → source 연결 (Day 17) ---------------------------------
+#
+# 기록된 source가 실제 코드를 가리키지 못하면 SourceViewer가 엉뚱한 줄을 보여 주고
+# 아무도 모른다. 진실은 stdlib(inspect)에서 독립적으로 구한다 — collector와 같은 계산을
+# 재사용하면 둘이 같이 틀렸을 때 테스트가 공허하게 통과한다.
+
+RELATIVE_PATH = "tests/unit/test_spans.py"
+
+
+async def test_recorded_source_points_at_the_function_that_ran():
+    with tracing(ROOT) as rows:
+        assert await root() == "leaf"
+
+    traced = {"root": root, "middle": middle, "leaf": leaf}
+    seen = set()
+    for row in rows:
+        function = (row["source"] or {}).get("function")
+        if function not in traced:
+            continue
+        seen.add(function)
+        _, first_lineno = inspect.getsourcelines(traced[function])
+        assert row["source"]["line"] == first_lineno, row
+        assert row["source"]["file"] == RELATIVE_PATH, row
+
+    assert seen == set(traced), seen
+
+
+async def test_recorded_source_opens_a_snippet_containing_the_definition():
+    """UI의 클릭 경로. segment의 source를 그대로 snippet reader에 넘긴다."""
+    with tracing(ROOT) as rows:
+        assert await leaf() == "leaf"
+
+    source = next(row["source"] for row in rows if (row["source"] or {}).get("function") == "leaf")
+    snippet = read_snippet(ROOT, source["file"], source["line"])
+
+    assert snippet["file"] == source["file"]
+    assert any("async def leaf(" in line for line in snippet["lines"])
+    # source.line이 snippet 범위 안에 있어야 UI가 그 줄을 하이라이트할 수 있다.
+    assert snippet["start_line"] <= source["line"] < snippet["start_line"] + len(snippet["lines"])
+
+
+async def test_decorated_function_records_the_decorator_line_not_the_def_line():
+    """계약이다. co_firstlineno는 CPython이 주는 값이고 우리가 바꾸지 않는다.
+
+    SourceViewer가 source.line만 하이라이트하면 사용자는 decorator를 보게 된다.
+    def 줄을 강조하려면 snippet 안에서 찾아야 한다.
+    """
+    with tracing(ROOT) as rows:
+        assert await decorated() == "decorated"
+
+    source = next(
+        row["source"] for row in rows if (row["source"] or {}).get("function") == "decorated"
+    )
+    lines, first_lineno = inspect.getsourcelines(decorated)
+
+    assert source["line"] == first_lineno
+    assert lines[0].lstrip().startswith("@_passthrough"), lines[0]
+    assert lines[1].lstrip().startswith("async def decorated("), lines[1]
+
+    # 기본 radius로도 def 줄이 snippet에 들어온다.
+    snippet = read_snippet(ROOT, source["file"], source["line"])
+    assert any("async def decorated(" in line for line in snippet["lines"])

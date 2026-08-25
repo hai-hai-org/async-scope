@@ -366,3 +366,84 @@ async def test_replayed_buffer_is_labeled_and_measured_on_its_own_clock(demo_app
     assert replayed["status"] == "running"
 
     assert mixed["buffer"]["source"] == "mixed"
+
+
+def _walk_spans(nodes):
+    for node in nodes:
+        yield node
+        yield from _walk_spans(node["children"])
+
+
+async def test_span_source_opens_through_the_source_api(demo_app):
+    """UI의 클릭 경로 그대로: Timeline segment → span 노드 → source snippet."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/non-blocking")
+            requests = (await client.get("/__asyncscope__/api/requests")).json()
+            request_id = requests["items"][0]["request_id"]
+            detail = (
+                await client.get(f"/__asyncscope__/api/requests/{request_id}")
+            ).json()
+
+            snippets = {}
+            for node in _walk_spans(detail["spans"]):
+                source = node["source"]
+                assert source is not None, node
+                snippets[node["span_id"]] = (
+                    source,
+                    await client.get(
+                        "/__asyncscope__/api/source",
+                        params={"file": source["file"], "line": source["line"]},
+                    ),
+                )
+    finally:
+        scope.uninstall()
+
+    assert snippets, "열어 볼 span이 없다"
+    for source, response in snippets.values():
+        assert response.status_code == 200, source
+        payload = response.json()
+        assert payload["file"] == source["file"]
+        # demo handler는 @app.get이 붙어 있다. source.line은 decorator 줄이지만
+        # 기본 radius로 def 줄이 snippet에 들어온다.
+        assert any(
+            f"def {source['function']}(" in line for line in payload["lines"]
+        ), (source, payload["lines"])
+        assert (
+            payload["start_line"]
+            <= source["line"]
+            < payload["start_line"] + len(payload["lines"])
+        )
+
+
+async def test_recommendation_source_opens_through_the_source_api(demo_app):
+    """Analyzer의 해결 단계도 같은 endpoint로 열린다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+
+            findings = (await client.get("/__asyncscope__/api/findings")).json()
+            step = next(
+                step
+                for item in findings["items"]
+                for step in item["recommendation"]["steps"]
+                if step["source"] is not None
+            )
+            response = await client.get(
+                "/__asyncscope__/api/source",
+                params={"file": step["source"]["file"], "line": step["source"]["line"]},
+            )
+    finally:
+        scope.uninstall()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["file"] == step["source"]["file"]
+    # recommendation은 span이 아니라 실제 호출 줄을 가리킨다.
+    assert any("time.sleep(" in line for line in payload["lines"])
