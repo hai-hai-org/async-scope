@@ -275,6 +275,7 @@ async def test_overhead_is_measured(app, capsys):
         print(f"\n[overhead] off={off * 1000:.2f}ms on={on * 1000:.2f}ms ratio={ratio:.2f}x")
     # 측정 (M0, macOS/CPython 3.13): DISABLE 도입 전 1.60x → 도입 후 1.07x.
     # normalized 공통 필드 추가 후 1.02~1.17x (실행 간 노이즈가 이 차이보다 크다).
+    # span tree와 await 분류 추가 후 1.18~1.27x (event당 dict/list 연산 + contextvar read 1회).
     # 여기 /demo/quick은 대기가 없는 최악 조건이고, 실제 대기가 있는 요청은 1.01x다.
     # ponytail: set_local_events는 검토 후 기각. DISABLE 이후 남은 callback의 85%가
     # 실제로 기록되는 project coroutine이라 더 줄일 여지가 없다 (요청당 낭비 0.35회).

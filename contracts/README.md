@@ -113,9 +113,29 @@ fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또�
 | --- | --- | --- |
 | `span_id`, `parent_span_id` | 프로젝트 coroutine 이벤트에 채워진다. request/response/task/loop 이벤트는 `null` | 완료 |
 | `duration_ns` | `request.end`, `loop.blocked`, `task.end`, `task.cancel`, `coroutine.end` | 완료 |
-| `coroutine.suspend`의 `label`, `library` | `"unknown await"`, `null` | adapter classifier 작업 |
+| `coroutine.suspend`의 `label`, `library` | 지원 adapter는 `"await asyncpg fetch"` 형태 label과 `library`, 나머지는 `"unknown await"` / `null` | 완료 |
 | 예외로 끝난 coroutine | `coroutine.end`가 나오지 않는다 (`PY_UNWIND`는 span 스택 회수에만 쓴다) | 별도 결정 필요 |
 | `request.end`의 `status: "disconnected"` | 실제로 나오지 않는다 (아래 참고) | 별도 결정 필요 |
+
+### 지원 adapter
+
+adapter 진입점을 감싸 실제 호출을 관측하므로 `evidence`는 `observed`, `confidence`는 `null`이다.
+`library`당 진입점 하나로 시작한다.
+
+| `library` | 관측 지점 | `label` |
+| --- | --- | --- |
+| `asyncpg` | `Connection.fetch` | `await asyncpg fetch` |
+| `httpx` | `AsyncClient.request` | `await HTTPX request` |
+| `redis.asyncio` | `Redis.execute_command` | `await Redis command` |
+| `websockets` | `Connection.recv` (asyncio/legacy 양쪽) | `await WebSocket receive` |
+
+목록 밖의 await는 `label: "unknown await"` / `library: null`로 남는다. 추측해서 이름 붙이지 않는다.
+
+label은 adapter를 **직접 호출한 프레임**의 suspend에만 붙는다. 그 호출 아래에서 도는 다른
+coroutine의 suspend는 자기 await를 기다리는 것이므로 `unknown`으로 남는다.
+
+collector는 이미 import된 adapter만 감싼다. 대상 앱이 쓰지 않는 라이브러리를 collector가
+import하지 않는다. handler 안에서 지연 import하는 adapter는 놓친다.
 
 `task_id`는 collector가 부여하는 `task-<n>`이다. Task 이름(`Task-7`)은 loop가 붙이는 순번이고
 사용자가 `name=`으로 덮어쓸 수 있어서 식별자로 쓰지 않는다. coroutine 이벤트와 task 이벤트가 같은

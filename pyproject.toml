@@ -15,6 +15,11 @@ dev = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "ruff>=0.7",
+    # adapter classifier가 감싸는 진입점이 실제로 존재하는지 검증하는 용도.
+    # 실행에는 필요 없다 (dependencies = [] 유지). 검사는 importorskip으로 감싼다.
+    "asyncpg>=0.30",
+    "redis>=5",
+    "websockets>=13",
 ]
 
 [build-system]

@@ -51,6 +51,15 @@ request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "asyncscope_request_id", default=None
 )
 
+# adapter가 "지금 이 프레임이 무엇을 기다리는 중인지"를 남기는 자리. (span_id, library, label).
+# span_id는 adapter를 직접 호출한 프레임의 것이다 — 대조하지 않으면 adapter 호출 아래에서
+# 도는 남의 suspend까지 같은 label을 받는다.
+# (이름을 classifiers/awaits.py에 두면 monitoring이 classifiers를 import해야 해서 순환이
+#  된다. request_id, TASK_ID_ATTR과 같은 이유로 여기 둔다)
+awaiting: contextvars.ContextVar[tuple[str | None, str, str] | None] = contextvars.ContextVar(
+    "asyncscope_awaiting", default=None
+)
+
 # Task identity는 sink가 소유한다. 값을 붙이는 쪽은 collector/tasks.py다.
 # (이름을 tasks.py에 두면 monitoring이 tasks를 import해야 해서 순환이 된다)
 TASK_ID_ATTR = "_asyncscope_task_id"
@@ -80,6 +89,16 @@ def _stacks(task) -> tuple[list, list]:
         pair = ([], [])
         _spans[task] = pair
     return pair
+
+
+def current_span_id() -> str | None:
+    """지금 실행 중인 프로젝트 coroutine 프레임의 span_id. adapter wrapper가 호출자를 안다."""
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        task = None
+    stack, _ = _stacks(task)
+    return stack[-1][0] if stack else None
 
 
 def task_id(task) -> str | None:
@@ -171,9 +190,17 @@ def _record(name: str, code):
             parked.append(entry)
         elif entry[1] is not None:  # PY_RETURN, 시작을 관측한 span만 duration을 낸다
             duration_ns = now_ns - entry[1]
-    # ponytail: suspend는 무엇을 await하는지 모른다. PY_YIELD의 code object는 yield하는
-    # 쪽이고 awaitee가 아니다. 지원 adapter label은 classifiers/awaits.py에서 붙인다.
-    library = {"library": None} if category == "await" else {}
+    # PY_YIELD의 code object는 yield하는 쪽이고 awaitee가 아니다. 무엇을 기다리는지는
+    # classifiers/awaits.py가 adapter 진입점에서 남긴 값으로만 알 수 있고, 그 값은
+    # adapter를 직접 호출한 프레임에만 적용한다 (span 대조).
+    label_text = label.format(name=code.co_qualname)
+    library = {}
+    if category == "await":
+        hint = awaiting.get()
+        if hint is not None and hint[0] == entry[0]:
+            library, label_text = {"library": hint[1]}, hint[2]
+        else:
+            library = {"library": None}
     # ponytail: retval은 기록하지 않는다 (민감 값 미수집 경계).
     emit(
         event_type,
@@ -183,7 +210,7 @@ def _record(name: str, code):
         duration_ns=duration_ns,
         source=source,
         category=category,
-        label=label.format(name=code.co_qualname),
+        label=label_text,
         **library,
     )
 
