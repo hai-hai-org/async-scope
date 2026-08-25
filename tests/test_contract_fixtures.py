@@ -143,6 +143,7 @@ def test_expected_fixture_files_exist():
         "disconnect",
         "failure-cancel",
         "timeline",
+        "ui-stress",
         "unknown-await",
     }
 
@@ -297,3 +298,105 @@ def test_failure_cancel_and_disconnect_fixtures_expose_user_visible_status():
     )
     assert disconnected["status_code"] is None
     assert disconnected["disconnect_reason"] == "client_disconnected"
+
+
+# UI stress fixture가 시간이 지나며 평범해지면 조용히 stress 역할을 잃는다.
+# 하한을 걸어 두면 값을 줄일 때 테스트가 먼저 막는다.
+MIN_STRESS_PATH_LEN = 200
+MIN_STRESS_LABEL_LEN = 40
+MIN_STRESS_DURATION_NS = 3600 * 1_000_000_000
+MIN_STRESS_SPAN_DEPTH = 5
+
+
+def test_ui_stress_fixture_actually_stresses_the_layout():
+    events = _events("ui-stress")
+
+    longest_path = max(
+        len(event["path"]) for event in events if event["type"] == "request.start"
+    )
+    assert longest_path >= MIN_STRESS_PATH_LEN, longest_path
+
+    longest_label = max(len(event.get("label") or "") for event in events)
+    assert longest_label >= MIN_STRESS_LABEL_LEN, longest_label
+
+    longest_request = max(
+        event["duration_ns"] for event in events if event["type"] == "request.end"
+    )
+    assert longest_request >= MIN_STRESS_DURATION_NS, longest_request
+
+    parents = {
+        event["span_id"]: event["parent_span_id"]
+        for event in events
+        if event["type"] == "coroutine.start"
+    }
+    assert _deepest_chain(parents) >= MIN_STRESS_SPAN_DEPTH
+
+
+def test_ui_stress_fixture_covers_every_request_status():
+    ends = {
+        event["status"]
+        for event in _events("ui-stress")
+        if event["type"] == "request.end"
+    }
+    assert REQUEST_STATUSES <= ends, ends
+
+    # 끝나지 않은 request가 있어야 partial/live 상태를 그릴 수 있다.
+    started = {
+        event["request_id"]
+        for event in _events("ui-stress")
+        if event["type"] == "request.start"
+    }
+    ended = {
+        event["request_id"]
+        for event in _events("ui-stress")
+        if event["type"] == "request.end"
+    }
+    assert started - ended
+
+
+def test_ui_stress_fixture_covers_unknown_missing_and_truncated_state():
+    events = _events("ui-stress")
+
+    assert any(
+        event.get("label") == "unknown await" and event.get("library") is None
+        for event in events
+    ), "unknown await 상태가 없다"
+
+    assert any(
+        event["type"].startswith("coroutine.") and event["source"] is None
+        for event in events
+    ), "missing source 상태가 없다"
+
+    started = {
+        event["span_id"] for event in events if event["type"] == "coroutine.start"
+    }
+    ended = {event["span_id"] for event in events if event["type"] == "coroutine.end"}
+    assert ended - started, "coroutine.start 없이 끝난 truncated span이 없다"
+
+
+def test_timeline_fixture_carries_expected_geometry_for_every_request():
+    """UI가 좌표 계산을 대조할 기대 출력. 없으면 z가 기대값을 손으로 베낀다."""
+    expected = FIXTURES["timeline"]["expected"]
+    request_ids = {
+        event["request_id"]
+        for event in _events("timeline")
+        if event["type"] == "request.start"
+    }
+
+    assert set(expected) == request_ids
+    for geometry in expected.values():
+        assert sum(geometry["buckets"].values()) == geometry["measured_ns"]
+        assert geometry["spans"]
+        for span in geometry["spans"]:
+            # offset은 request 시작 기준 상대 좌표다. timestamp_ns는 축에 못 쓴다.
+            assert span["offset_ns"] >= 0
+
+
+def _deepest_chain(parents):
+    def depth(span_id, seen=()):
+        parent = parents.get(span_id)
+        if parent is None or parent not in parents or parent in seen:
+            return 1
+        return 1 + depth(parent, (*seen, span_id))
+
+    return max((depth(span_id) for span_id in parents), default=0)

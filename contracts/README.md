@@ -54,6 +54,12 @@ consume fixtures without depending on collector internals.
 | `dropped_count` | overflow로 buffer에서 밀려난 이벤트 수 |
 | `cursor_was_dropped(cursor)` | client cursor 이후 필요한 이벤트 일부가 이미 사라졌는지 여부 |
 
+**상한을 넘으면 request가 목록에서 통째로 사라진다.** `request.start`가 밀려난 request는
+`group_by_request`가 묶어도 summary를 만들 수 없어(시작 시각·method·path를 모른다) query
+결과에서 빠진다. 즉 `GET /api/requests`의 `total`이 실제 처리한 요청 수보다 작아질 수 있다.
+버그가 아니라 ring buffer의 결과다. 대량 요청을 화면에 띄우려면 `AsyncScope(app,
+buffer_size=...)`를 요청 수 x 요청당 이벤트 수보다 크게 잡는다. 기본값은 1000이다.
+
 ## SSE event stream API
 
 Timeline live update와 reconnect/replay가 소비한다. 내부 API는 target app보다 먼저 처리되므로
@@ -333,6 +339,51 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
 
 M1 must still implement adapter classifiers and API/query behavior against this
 contract.
+
+## UI fixture
+
+M0 시나리오 fixture와 목적이 다르다. 수집 사실이 아니라 **화면이 깨지는 극단값**을 담는다.
+`dashboard`가 backend 없이 loading/empty/stress 상태를 그릴 때 쓴다.
+
+### `ui-stress.json`
+
+| 담긴 것 | 무엇을 시험하나 |
+| --- | --- |
+| 200자 넘는 path, 40자 넘는 label·함수명 | Table cell truncation, tooltip, 가로 scroll |
+| 3시간 넘는 request duration | time axis 스케일, 숫자 폭 |
+| 6단계 span 중첩 | ExecutionFlowTree 들여쓰기 |
+| 같은 구간에 겹치는 request 5개 + `loop.blocked` | Timeline row 밀도, blocking marker |
+| `label: "unknown await"` / `library: null` | unknown 상태 |
+| `source: null`인 coroutine 이벤트 | SourceViewer의 missing source |
+| `coroutine.start` 없이 `coroutine.end`만 있는 span | truncated span, stream 밖 parent |
+| `completed`·`failed`·`cancelled`·`disconnected` request | status별 표시 |
+| `request.end`가 없는 request | partial/live 상태 |
+
+극단값이 실제로 극단인지 `tests/test_contract_fixtures.py`가 하한으로 고정한다. 값을
+줄이면 테스트가 먼저 막는다.
+
+### `timeline.json`의 `expected` 블록
+
+같은 입력에 대한 **기대 출력**이다. UI가 좌표 계산을 대조한다.
+
+```json
+"expected": {
+  "req-1": {
+    "duration_ns": 57000000,
+    "measured_ns": 57000000,
+    "buckets": { "running": 4000000, "waiting": 51000000, "blocking": 0,
+                 "response": 500000, "unattributed": 1500000 },
+    "spans": [
+      { "span_id": "span-req-1-handler", "parent_span_id": null,
+        "offset_ns": 1000000, "duration_ns": 55000000, "wait_ns": 0,
+        "children": ["...같은 모양..."] }
+    ]
+  }
+}
+```
+
+`offset_ns`는 **request 시작 기준 상대 좌표**다. 이벤트의 `timestamp_ns`는
+`perf_counter_ns`라 절대 시각이 아니고 축에 그대로 쓸 수 없다.
 
 ## Collector 구현 현황
 

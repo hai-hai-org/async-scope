@@ -8,6 +8,7 @@ from asyncscope.analysis.requests import (
     get_request_detail,
     query_requests,
 )
+from asyncscope.storage import EventBuffer
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 
@@ -136,15 +137,42 @@ def test_request_detail_time_distribution_accounts_for_every_nanosecond():
     buckets = distribution["buckets"]
 
     assert distribution["complete"]
-    assert distribution["duration_ns"] == 57000000
-    assert distribution["measured_ns"] == 57000000
     assert sum(buckets.values()) == distribution["measured_ns"]
     assert all(value >= 0 for value in buckets.values())
 
     # asyncio.sleep(0.05)이 waiting으로 잡히고, 억지로 0을 만들지 않는다.
-    assert buckets["waiting"] == 51000000
-    assert buckets["response"] == 500000
-    assert buckets["unattributed"] == 1500000
+    assert buckets["waiting"] > buckets["running"]
+    assert buckets["unattributed"] > 0
+
+
+def test_request_detail_matches_the_expected_geometry_fixture():
+    """timeline.json의 expected가 UI 좌표 계약이다. 여기서 어긋나면 z의 Timeline이 틀어진다."""
+    fixture = json.loads((FIXTURE_DIR / "timeline.json").read_text())
+
+    for request_id, geometry in fixture["expected"].items():
+        detail = get_request_detail(fixture["events"], request_id)
+        distribution = detail["time_distribution"]
+
+        assert distribution["duration_ns"] == geometry["duration_ns"], request_id
+        assert distribution["measured_ns"] == geometry["measured_ns"], request_id
+        assert distribution["buckets"] == geometry["buckets"], request_id
+
+        origin = detail["request"]["started_at_ns"]
+        assert _geometry(detail["spans"], origin) == geometry["spans"], request_id
+
+
+def _geometry(spans, origin):
+    return [
+        {
+            "span_id": span["span_id"],
+            "parent_span_id": span["parent_span_id"],
+            "offset_ns": span["started_at_ns"] - origin,
+            "duration_ns": span["duration_ns"],
+            "wait_ns": span["wait_ns"],
+            "children": _geometry(span["children"], origin),
+        }
+        for span in spans
+    ]
 
 
 def test_request_detail_attributes_loop_delay_to_the_overlapping_request():
@@ -202,3 +230,88 @@ def test_span_without_a_start_event_is_marked_truncated():
 
     assert [span["span_id"] for span in detail["spans"]] == ["span-cut"]
     assert detail["spans"][0]["truncated"]
+
+
+STRESS_REQUESTS = 1000
+
+
+def _stress_events(count=STRESS_REQUESTS):
+    """1000 request를 fixture 파일로 두지 않는다. 수 MB JSON이 저장소에 들어간다."""
+    events = []
+    for index in range(count):
+        request_id = f"req-{index:04d}"
+        start = index * 1_000_000
+        duration = (index % 7 + 1) * 1_000_000
+        events.append(
+            {
+                "type": "request.start",
+                "timestamp_ns": start,
+                "request_id": request_id,
+                "method": "GET" if index % 2 else "POST",
+                "path": f"/api/items/{index % 10}",
+            }
+        )
+        events.append(
+            {
+                "type": "request.end",
+                "timestamp_ns": start + duration,
+                "request_id": request_id,
+                "duration_ns": duration,
+                "status_code": 500 if index % 10 == 0 else 200,
+                "status": "failed" if index % 10 == 0 else "completed",
+            }
+        )
+    return events
+
+
+def test_pagination_covers_every_request_without_gaps_or_duplicates():
+    events = _stress_events()
+
+    seen = []
+    page = 1
+    while True:
+        result = query_requests(events, sort="started_at_ns", order="asc", page=page, page_size=200)
+        assert result["total"] == STRESS_REQUESTS
+        seen.extend(item["request_id"] for item in result["items"])
+        if not result["has_next"]:
+            break
+        page += 1
+
+    assert page == 5
+    assert len(seen) == STRESS_REQUESTS
+    assert len(set(seen)) == STRESS_REQUESTS
+    # 경계에서 순서가 흐트러지면 virtualization이 같은 행을 두 번 그린다.
+    assert seen == sorted(seen)
+
+
+def test_sort_and_filter_stay_exact_at_scale():
+    events = _stress_events()
+
+    newest = query_requests(events, sort="started_at_ns", order="desc", page_size=1)
+    assert newest["items"][0]["request_id"] == f"req-{STRESS_REQUESTS - 1:04d}"
+
+    longest = query_requests(events, sort="duration_ns", order="desc", page_size=1)
+    assert longest["items"][0]["duration_ns"] == 7_000_000
+
+    assert query_requests(events, status="failed")["total"] == STRESS_REQUESTS // 10
+    assert query_requests(events, method="get")["total"] == STRESS_REQUESTS // 2
+    assert query_requests(events, path="/api/items/3")["total"] == STRESS_REQUESTS // 10
+
+
+def test_requests_disappear_when_the_ring_buffer_drops_their_start():
+    """ring buffer 계약. total이 줄어드는 건 버그가 아니라 상한의 결과다.
+
+    z가 이걸 모르면 "1000개를 보냈는데 왜 목록이 짧지"로 시간을 날린다.
+    """
+    events = _stress_events()
+    buffer = EventBuffer(max_events=500)
+    for event in events:
+        buffer.append(event)
+
+    result = query_requests(buffer.snapshot(), page_size=200)
+
+    assert buffer.dropped_count == len(events) - 500
+    assert result["total"] < STRESS_REQUESTS
+    # 살아남은 request는 전부 최신 쪽이고 summary가 온전하다.
+    assert all(item["duration_ns"] is not None for item in result["items"])
+    assert min(item["request_id"] for item in result["items"]) > "req-0000"
