@@ -14,7 +14,7 @@ import pytest
 from asyncscope.collector import loop as loop_collector
 from asyncscope.collector.middleware import RequestTracker
 from asyncscope.collector.monitoring import tracing
-from asyncscope.web.source import read_snippet
+from asyncscope.source import read_snippet
 
 ROOT = Path(__file__).resolve().parent.parent
 DEMO = "examples/demo.py"

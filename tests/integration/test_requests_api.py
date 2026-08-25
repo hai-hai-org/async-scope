@@ -161,7 +161,11 @@ async def test_findings_api_reports_the_loop_delay_and_its_affected_request(demo
     blocking = [item for item in findings["items"] if item["type"] == "blocking"]
     assert blocking, "time.sleep(0.3)은 finding이 되어야 한다"
     assert blocking[0]["evidence"] == "inferred"
-    assert blocking[0]["recommendation"] is None
+    recommendation = blocking[0]["recommendation"]
+    assert recommendation["kind"] == "known_blocking_call"
+    assert recommendation["certainty"] == "candidate"
+    assert any("time.sleep()" in step["text"] for step in recommendation["steps"])
+    assert any("await asyncio.sleep()" in step["text"] for step in recommendation["steps"])
     assert blocking[0]["affected_requests"][0]["path"] == "/demo/blocking"
 
     assert detail.status_code == 200

@@ -11,6 +11,7 @@ import pytest
 
 from asyncscope.analysis import QueryError
 from asyncscope.analysis.findings import build_findings, get_finding, query_findings
+from asyncscope.analysis.recommendations import MEASURE_STEPS
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
 
@@ -53,8 +54,15 @@ def test_loop_delay_becomes_one_finding_with_a_candidate_not_a_culprit():
                 "ended_at_ns": 2313000000,
             }
         ],
-        # Day 10 범위. 확인되지 않은 해결책을 미리 단정하지 않는다.
-        "recommendation": None,
+        # project_root가 없으면 소스를 못 읽는다. 해결책을 단정하지 않고 측정 안내로 떨어진다.
+        "recommendation": {
+            "kind": "measure",
+            "certainty": "unknown",
+            "steps": [
+                {"text": text, "source": None}
+                for text in MEASURE_STEPS["blocking"]
+            ],
+        },
     }
 
 
@@ -196,3 +204,53 @@ def test_get_finding_deep_link_and_missing_id():
 def test_query_findings_rejects_invalid_parameters(kwargs, message):
     with pytest.raises(QueryError, match=message):
         query_findings(_events("blocking"), **kwargs)
+
+
+def test_recommendation_names_the_known_blocking_call_when_source_is_readable(tmp_path):
+    """KNOWN_BLOCKING에 정확히 일치하는 호출만 지목한다."""
+    (tmp_path / "service.py").write_text(
+        "import time\n"
+        "\n"
+        "def decorate(fn):\n"
+        "    return fn\n"
+        "\n"
+        "@decorate\n"
+        "async def handler():\n"
+        "    time.sleep(0.3)\n"
+        "    return 1\n"
+    )
+    events = [
+        {
+            "type": "coroutine.start",
+            "timestamp_ns": 900_000_000,
+            "request_id": "req-1",
+            "span_id": "span-1",
+            "source": {"file": "service.py", "function": "handler", "line": 6},
+            "category": "running",
+            "label": "handler()",
+        },
+        {
+            "type": "loop.blocked",
+            "timestamp_ns": 1_300_000_000,
+            "request_id": None,
+            "duration_ns": 300_000_000,
+            "delay_ns": 300_000_000,
+            "threshold_ns": 50_000_000,
+            "evidence": "inferred",
+            "confidence": 0.6,
+        },
+    ]
+
+    without_root = build_findings(events)[0]["recommendation"]
+    assert without_root["kind"] == "measure"
+
+    recommendation = build_findings(events, project_root=tmp_path)[0]["recommendation"]
+    assert recommendation["kind"] == "known_blocking_call"
+    # 정적 분석은 그 호출이 실제로 실행됐다는 증거가 아니다.
+    assert recommendation["certainty"] == "candidate"
+    assert len(recommendation["steps"]) == 1
+    step = recommendation["steps"][0]
+    assert "time.sleep()" in step["text"]
+    assert "await asyncio.sleep()" in step["text"]
+    # decorator가 붙어 co_firstlineno가 6이어도 실제 호출 줄을 가리킨다.
+    assert step["source"] == {"file": "service.py", "line": 8}

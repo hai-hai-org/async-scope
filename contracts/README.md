@@ -189,7 +189,38 @@ request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진�
 
 `suspect`는 침묵 구간 **시작 직전**에 마지막으로 실행된 프로젝트 프레임이며 항상
 `certainty: "candidate"`다. heartbeat가 깨어난 시점의 마지막 coroutine을 쓰면 지연이 끝난
-뒤 처리된 다른 request를 지목하게 된다. `recommendation`은 Day 10까지 항상 `null`이다.
+뒤 처리된 다른 request를 지목하게 된다.
+
+### recommendation
+
+`recommendation`은 `null`이 되지 않는다. 모양도 하나뿐이라 소비자가 `kind`별로 다른
+구조를 다루지 않는다.
+
+```json
+{
+  "kind": "known_blocking_call",
+  "certainty": "candidate",
+  "steps": [
+    {
+      "text": "time.sleep() — event loop를 막는 동기 호출이다. await asyncio.sleep()으로 바꾼다.",
+      "source": { "file": "examples/demo.py", "line": 60 }
+    }
+  ]
+}
+```
+
+| `kind` | 언제 | `certainty` | `steps[].source` |
+| --- | --- | --- | --- |
+| `known_blocking_call` | suspect 함수 안에서 `KNOWN_BLOCKING`에 정확히 일치하는 호출을 찾았다 | `candidate` | 호출 줄 |
+| `measure` | 지목하지 못했다 | `unknown` | `null` |
+
+- `known_blocking_call`은 suspect 함수의 소스를 `ast`로 읽어 찾는다. 이름이 정확히
+  일치하는 호출만 인정한다. `conn.execute()`처럼 소스에서 대상을 알 수 없는 호출은
+  지목하지 않는다.
+- 중첩 함수와 lambda 안의 호출은 세지 않는다. 다른 프레임이다.
+- `measure`의 `steps`는 해결책이 아니라 **다음 측정 방법**이다. 확정할 수 없는 finding에
+  해결책을 단정하지 않는다.
+- `unattributed` finding은 항상 `measure`이며 전용 단계를 받는다.
 
 ## Source snippet API
 
@@ -267,6 +298,9 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
 - Unsupported awaits use `category: "await"` and `label: "unknown await"`.
   They must not be labeled DB, HTTP, Redis, or WebSocket without adapter
   evidence.
+- `recommendation.kind: "known_blocking_call"`은 **정적 분석** 결과다. 그 호출이 이번
+  지연 때 실제로 실행됐다는 증거가 아니므로 `certainty`는 `candidate`다. 실행 경로를
+  관측해 `observed`로 올리려면 새 event type이 필요하고, 그건 m/z가 함께 정한다.
 - `loop_delay.average_ns`는 threshold를 **넘어 검출된** 지연의 평균이다. heartbeat는
   threshold 이하 sample을 이벤트로 남기지 않으므로 전체 평균은 계산할 수 없다. 소비자가
   무엇의 평균인지 알 수 있도록 `samples`와 `threshold_ns`를 함께 반환한다.

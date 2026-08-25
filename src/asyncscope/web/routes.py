@@ -15,7 +15,7 @@ from ..analysis import QueryError
 from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
-from .source import read_snippet
+from ..source import read_snippet
 from .sse import handle_sse
 
 API_PREFIX = "/__asyncscope__/api"
@@ -52,7 +52,14 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     if path == REQUESTS_PATH:
         await _guarded(send, lambda: query_requests(buffer.snapshot(), **_request_args(params)))
     elif path == FINDINGS_PATH:
-        await _guarded(send, lambda: query_findings(buffer.snapshot(), **_finding_args(params)))
+        await _guarded(
+            send,
+            lambda: query_findings(
+                buffer.snapshot(),
+                project_root=app_scope.project_root,
+                **_finding_args(params),
+            ),
+        )
     elif path == EVENTS_PATH:
         await _handle_events(buffer, params, scope, receive, send)
     elif path == SUMMARY_PATH:
@@ -62,7 +69,10 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     elif (request_id := _detail_id(path, REQUESTS_PATH)) is not None:
         await _detail_response(send, get_request_detail(buffer.snapshot(), request_id))
     elif (finding_id := _detail_id(path, FINDINGS_PATH)) is not None:
-        await _detail_response(send, get_finding(buffer.snapshot(), finding_id))
+        await _detail_response(
+            send,
+            get_finding(buffer.snapshot(), finding_id, project_root=app_scope.project_root),
+        )
     else:
         await _json_response(send, 404, {"error": "not_found"})
     return True
@@ -120,7 +130,7 @@ def _summary(app_scope, params: dict[str, list[str]]) -> dict:
 
 
 async def _handle_source(project_root: str | Path, params: dict[str, list[str]], send) -> None:
-    """project root 밖은 읽지 않는다. 경계 판정은 web/source.py 하나뿐이다."""
+    """project root 밖은 읽지 않는다. 경계 판정은 asyncscope/source.py 하나뿐이다."""
     file = _one(params, "file")
     if not file:
         await _json_response(send, 400, {"error": "bad_request", "message": "file is required"})
