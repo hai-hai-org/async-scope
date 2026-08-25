@@ -1,6 +1,7 @@
 """AppShell summary metrics. 전부 event buffer에서 파생한다."""
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -128,3 +129,29 @@ def test_blocked_gap_length_equals_the_measured_delay():
     start, stop = blocked_gap(event)
     assert stop - start == event["delay_ns"]
     assert start == 2_000_000_000
+
+
+def test_replayed_capture_must_be_measured_on_its_own_clock():
+    """timestamp_ns는 perf_counter_ns로 프로세스 상대값이다.
+
+    지금 perf_counter를 anchor로 쓰면 남의 capture는 window 밖으로 전부 밀려나고
+    "blocking 없음, 트래픽 없음"이 된다. capture의 존재 이유가 그 둘일 때 특히 위험하다.
+    """
+    events = _events("blocking")
+    newest_ns = max(event["timestamp_ns"] for event in events)
+
+    # 잘못된 anchor: 이 프로세스의 지금 시각
+    wrong = summarize(events, now_ns=time.perf_counter_ns())
+    assert wrong["request_rate_per_second"] == 0.0
+    assert wrong["blocking_count"] == 0
+    assert wrong["loop_delay"]["samples"] == 0
+
+    # 옳은 anchor: capture의 마지막 이벤트
+    right = summarize(events, now_ns=newest_ns)
+    assert right["measured_window_ns"] == newest_ns - min(
+        event["timestamp_ns"] for event in events
+    )
+    assert right["request_rate_per_second"] > 0
+    assert right["blocking_count"] == 1
+    assert right["loop_delay"]["samples"] == 1
+    assert right["loop_delay"]["max_ns"] == 300_000_000
