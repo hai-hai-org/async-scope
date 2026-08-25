@@ -101,9 +101,21 @@ async def long_running():
     return {"result": "done"}
 
 
+@app.get("/demo/unknown-await")
+async def unknown_await():
+    """adapter 목록에 없는 await. 분류가 unknown으로 남는지 보는 anchor다."""
+    await asyncio.sleep(0.05)
+    return {"result": "done"}
+
+
 @app.get("/demo/adapters")
 async def adapter_demo():
-    """지원 adapter fixture의 source anchor. 실제 adapter import는 M1에서 한다."""
+    """지원 adapter fixture의 source anchor.
+
+    ponytail: 여기서 진짜 asyncpg/Redis/WebSocket을 부르지 않는다. 넷 다 실제 서버가
+    있어야 하는데 demo는 네트워크 없이 돌아야 한다. adapter wrapper가 실제로 붙고
+    label을 붙이는지는 tests/unit/test_classifiers.py가 httpx로 검증한다.
+    """
     await asyncio.sleep(0)
     return {"result": "fixture-only"}
 
