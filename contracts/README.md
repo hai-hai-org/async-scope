@@ -60,6 +60,38 @@ consume fixtures without depending on collector internals.
 버그가 아니라 ring buffer의 결과다. 대량 요청을 화면에 띄우려면 `AsyncScope(app,
 buffer_size=...)`를 요청 수 x 요청당 이벤트 수보다 크게 잡는다. 기본값은 1000이다.
 
+## JSON export/replay API
+
+Timeline replay와 수동 검증이 소비한다. export/replay도 같은 `EventBuffer`를 사용하며,
+내부 API 요청 자체는 target app tracing event로 남기지 않는다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/export` | 현재 buffer snapshot을 JSON으로 반환 |
+| `POST /__asyncscope__/api/replay` | export/fixture JSON의 `events`를 현재 buffer로 교체 |
+
+export payload:
+
+```json
+{
+  "schema_version": "m0.normalized.v1",
+  "exported_at": "2026-08-25T00:00:00+00:00",
+  "buffer": {
+    "events": 2,
+    "max_events": 1000,
+    "dropped_count": 0,
+    "first_sequence": 1,
+    "last_sequence": 2
+  },
+  "events": ["...normalized event with storage-owned sequence..."]
+}
+```
+
+`POST /replay`는 같은 `schema_version`과 `events` list를 받는다. 입력 event의 `sequence`는
+외부 값이라 신뢰하지 않고 제거한다. buffer를 교체한 뒤 `EventBuffer`가 새 sequence를
+1부터 다시 부여한다. 잘못된 JSON, object가 아닌 payload, schema mismatch, list가 아닌
+`events`, object가 아닌 event는 `400 bad_request`다.
+
 ## SSE event stream API
 
 Timeline live update와 reconnect/replay가 소비한다. 내부 API는 target app보다 먼저 처리되므로
@@ -104,6 +136,7 @@ data: {"error":"event_gap","cursor":0,"first_sequence":2,"last_sequence":10,"dro
 | Analyzer finding | `GET /__asyncscope__/api/findings` |
 | AppShell MetricCard | `GET /__asyncscope__/api/summary` |
 | Settings panel | `GET/PATCH /__asyncscope__/api/settings` |
+| Replay mode | `GET /__asyncscope__/api/export`, `POST /__asyncscope__/api/replay` |
 | Evidence legend | `evidence`, `confidence`, `category`, `label` |
 
 ## Requests query API
@@ -392,7 +425,22 @@ contract.
 ## UI fixture
 
 M0 시나리오 fixture와 목적이 다르다. 수집 사실이 아니라 **화면이 깨지는 극단값**을 담는다.
-`dashboard`가 backend 없이 loading/empty/stress 상태를 그릴 때 쓴다.
+`dashboard`가 backend 없이 loading/empty/error/stress 상태를 그릴 때 쓴다.
+
+### `contracts/ui/*.json`
+
+Day11에서 M1 UI 상태 fixture를 동결한다. 각 fixture는 `schema_version:
+"m1.ui-state.v1"`와 `summary`, `requests`, `findings`, `settings`, `events` 섹션을
+가진다. 각 섹션은 `state`, `data`, `error`를 가진다.
+
+| Fixture | Meaning |
+| --- | --- |
+| `loading.json` | 아직 API/SSE 응답을 받기 전 |
+| `empty.json` | API는 성공했지만 event buffer와 파생 목록이 비어 있음 |
+| `error.json` | API 실패 또는 SSE gap처럼 사용자가 복구 행동을 해야 하는 상태 |
+
+`empty.json`의 `summary`, `requests`, `findings`, `settings`는 실제 API의 빈 응답 shape에
+맞춘다. `error.json`은 section별 `{ "code", "message" }` error를 고정한다.
 
 ### `ui-stress.json`
 

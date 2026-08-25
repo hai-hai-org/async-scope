@@ -1,0 +1,56 @@
+{
+  "schema_version": "m1.ui-state.v1",
+  "state": "error",
+  "summary": {
+    "state": "error",
+    "data": null,
+    "error": {
+      "code": "api_error",
+      "message": "summary unavailable"
+    }
+  },
+  "requests": {
+    "state": "error",
+    "data": null,
+    "selected": null,
+    "error": {
+      "code": "api_error",
+      "message": "requests unavailable"
+    }
+  },
+  "findings": {
+    "state": "error",
+    "data": null,
+    "selected": null,
+    "error": {
+      "code": "api_error",
+      "message": "findings unavailable"
+    }
+  },
+  "settings": {
+    "state": "error",
+    "data": null,
+    "error": {
+      "code": "bad_request",
+      "message": "invalid settings payload"
+    }
+  },
+  "events": {
+    "state": "error",
+    "data": {
+      "items": [],
+      "cursor": 0,
+      "gap": {
+        "error": "event_gap",
+        "cursor": 0,
+        "first_sequence": 4,
+        "last_sequence": 10,
+        "dropped_count": 3
+      }
+    },
+    "error": {
+      "code": "event_gap",
+      "message": "event buffer gap"
+    }
+  }
+}

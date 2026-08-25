@@ -2,9 +2,14 @@ import json
 from pathlib import Path
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "contracts" / "fixtures"
+UI_FIXTURE_DIR = Path(__file__).resolve().parent.parent / "contracts" / "ui"
 FIXTURES = {
     path.stem: json.loads(path.read_text(encoding="utf-8"))
     for path in sorted(FIXTURE_DIR.glob("*.json"))
+}
+UI_FIXTURES = {
+    path.stem: json.loads(path.read_text(encoding="utf-8"))
+    for path in sorted(UI_FIXTURE_DIR.glob("*.json"))
 }
 
 COMMON_FIELDS = {
@@ -66,6 +71,8 @@ KNOWN_ADAPTER_LABELS = {
     "websockets",
 }
 ADAPTER_LIBRARIES = {"asyncpg", "httpx", "redis.asyncio", "websockets"}
+UI_SECTIONS = {"summary", "requests", "findings", "settings", "events"}
+UI_STATES = {"loading", "empty", "ready", "error"}
 
 
 def _events(name):
@@ -148,6 +155,10 @@ def test_expected_fixture_files_exist():
     }
 
 
+def test_expected_ui_fixture_files_exist():
+    assert set(UI_FIXTURES) == {"loading", "empty", "error"}
+
+
 def test_fixtures_follow_m0_normalized_contract():
     for fixture in FIXTURES.values():
         assert fixture["schema_version"] == "m0.normalized.v1"
@@ -162,6 +173,48 @@ def test_fixtures_follow_m0_normalized_contract():
 
 def test_fixtures_do_not_include_sensitive_values_or_collector_culprits():
     for fixture in FIXTURES.values():
+        for node in _walk(fixture):
+            if isinstance(node, dict):
+                assert FORBIDDEN_KEYS.isdisjoint(node)
+
+
+def test_ui_fixtures_follow_m1_state_contract():
+    for name, fixture in UI_FIXTURES.items():
+        assert fixture["schema_version"] == "m1.ui-state.v1"
+        assert fixture["state"] == name
+        assert UI_SECTIONS <= set(fixture)
+
+        for section_name in UI_SECTIONS:
+            section = fixture[section_name]
+            assert {"state", "data", "error"} <= set(section), section
+            assert section["state"] in UI_STATES, section
+            if section["state"] == "loading":
+                assert section["data"] is None
+                assert section["error"] is None
+            if section["state"] == "error":
+                assert section["data"] is None or section_name == "events"
+                assert set(section["error"]) == {"code", "message"}
+
+
+def test_empty_ui_fixture_uses_real_api_empty_shapes():
+    fixture = UI_FIXTURES["empty"]
+
+    assert fixture["summary"]["data"]["request_rate_per_second"] is None
+    assert fixture["summary"]["data"]["buffer"]["events"] == 0
+    assert fixture["requests"]["data"] == {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 50,
+        "has_next": False,
+    }
+    assert fixture["findings"]["data"] == fixture["requests"]["data"]
+    assert fixture["settings"]["data"]["persisted"] is False
+    assert fixture["events"]["data"] == {"items": [], "cursor": None, "gap": None}
+
+
+def test_ui_fixtures_do_not_include_sensitive_keys():
+    for fixture in UI_FIXTURES.values():
         for node in _walk(fixture):
             if isinstance(node, dict):
                 assert FORBIDDEN_KEYS.isdisjoint(node)

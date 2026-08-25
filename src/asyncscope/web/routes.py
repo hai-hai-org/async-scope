@@ -16,6 +16,7 @@ from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
 from ..config import apply_settings_patch, settings_payload
+from ..export import export_payload, replay_into
 from ..source import read_snippet
 from .sse import handle_sse
 
@@ -26,6 +27,8 @@ SOURCE_PATH = f"{API_PREFIX}/source"
 EVENTS_PATH = f"{API_PREFIX}/events"
 SUMMARY_PATH = f"{API_PREFIX}/summary"
 SETTINGS_PATH = f"{API_PREFIX}/settings"
+EXPORT_PATH = f"{API_PREFIX}/export"
+REPLAY_PATH = f"{API_PREFIX}/replay"
 
 # snippet은 화면에 붙는 문맥이지 파일 뷰어가 아니다.
 MAX_RADIUS = 50
@@ -49,6 +52,9 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     if path == SETTINGS_PATH:
         await _handle_settings(app_scope, method, receive, send)
         return True
+    if path == REPLAY_PATH:
+        await _handle_replay(app_scope.buffer, method, receive, send)
+        return True
 
     if method != "GET":
         await _json_response(send, 405, {"error": "method_not_allowed"})
@@ -71,6 +77,8 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
         await _handle_events(buffer, params, scope, receive, send)
     elif path == SUMMARY_PATH:
         await _guarded(send, lambda: _summary(app_scope, params))
+    elif path == EXPORT_PATH:
+        await _json_response(send, 200, export_payload(buffer))
     elif path == SOURCE_PATH:
         await _handle_source(app_scope.project_root, params, send)
     elif (request_id := _detail_id(path, REQUESTS_PATH)) is not None:
@@ -192,6 +200,19 @@ async def _handle_settings(app_scope, method: str, receive, send) -> None:
         await _json_response(send, 200, payload)
         return
     await _json_response(send, 405, {"error": "method_not_allowed"})
+
+
+async def _handle_replay(buffer, method: str, receive, send) -> None:
+    if method != "POST":
+        await _json_response(send, 405, {"error": "method_not_allowed"})
+        return
+    try:
+        body = await _json_body(receive)
+        payload = replay_into(buffer, body)
+    except QueryError as exc:
+        await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
+        return
+    await _json_response(send, 200, payload)
 
 
 async def _guarded(send, query) -> None:
