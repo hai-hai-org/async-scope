@@ -20,6 +20,7 @@ from .collector import loop as loop_collector
 from .collector import monitoring
 from .collector import tasks as task_collector
 from .collector.middleware import RequestTracker
+from .config import SettingsState
 from .storage import EventBuffer, EventBufferSink
 from .web.routes import handle_api
 
@@ -61,6 +62,7 @@ class AsyncScope:
         self.threshold = threshold
         self.interval = interval
         self.buffer = buffer if buffer is not None else EventBuffer(buffer_size)
+        self.settings_state = SettingsState()
         self._out = out
         self._default_sink = False  # 기본 sink만 우리가 정리한다
         self._tracker = None
@@ -117,6 +119,17 @@ class AsyncScope:
             return
         task_collector.start(loop)
         self._heartbeat = loop_collector.start(self.threshold, self.interval)
+
+    def restart_heartbeat(self) -> None:
+        """threshold/interval live 변경을 반영한다.
+
+        Task factory와 monitoring callback은 그대로 두고 heartbeat만 다시 띄운다.
+        """
+        if self._heartbeat is not None:
+            self._heartbeat.cancel()
+            self._heartbeat = None
+        if self.installed:
+            self._attach_to_loop()
 
     async def __call__(self, scope, receive, send):
         if await handle_api(self, scope, receive, send):

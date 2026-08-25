@@ -103,6 +103,7 @@ data: {"error":"event_gap","cursor":0,"first_sequence":2,"last_sequence":10,"dro
 | Source viewer | `GET /__asyncscope__/api/source` |
 | Analyzer finding | `GET /__asyncscope__/api/findings` |
 | AppShell MetricCard | `GET /__asyncscope__/api/summary` |
+| Settings panel | `GET/PATCH /__asyncscope__/api/settings` |
 | Evidence legend | `evidence`, `confidence`, `category`, `label` |
 
 ## Requests query API
@@ -294,6 +295,54 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
 - `tracing`은 `install()` 여부다. `stale`은 서버가 판정하지 않는다 — 응답은 항상 방금
   계산한 값이고, poll 실패나 SSE 끊김은 client만 안다. UI는 `tracing: false`를
   `unavailable`로, 자기 연결 상태를 `stale`로 그린다.
+
+## Settings API
+
+Settings 패널이 소비한다. 지금 단계의 설정은 모두 process-local runtime 상태다. 파일이나
+사용자 설정 저장소에 persist하지 않는다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/settings` | 현재 runtime 설정, 적용 대기 설정, validation limit |
+| `PATCH /__asyncscope__/api/settings` | 설정 일부 변경 |
+
+```json
+{
+  "tracing": true,
+  "persisted": false,
+  "settings": {
+    "threshold_s": 0.05,
+    "interval_s": 0.01,
+    "buffer_size": 1000,
+    "project_root": "/project/root"
+  },
+  "pending_restart": {
+    "buffer_size": 2000
+  },
+  "limits": {
+    "threshold_s": { "min": 0.001, "max": 10.0 },
+    "interval_s": { "min": 0.001, "max": 10.0 },
+    "buffer_size": { "min": 1, "max": 100000 },
+    "project_root": { "must_exist": true, "must_be_directory": true }
+  },
+  "feedback": {
+    "acknowledged": 0,
+    "false_positive": 0
+  }
+}
+```
+
+- `threshold_s`, `interval_s`는 live 설정이다. `PATCH` 즉시 heartbeat를 재시작해서 새
+  값을 적용한다.
+- `buffer_size`, `project_root`는 restart-required 설정이다. 실행 중인 buffer와 collector
+  범위는 바꾸지 않고 `pending_restart`에만 저장한다. 현재 값과 같은 값으로 다시 보내면
+  pending에서 제거한다.
+- `persisted: false`는 이번 단계에서 의도된 상태다. 디스크 저장, 사용자별 profile,
+  feedback write endpoint는 별도 이슈에서 다룬다.
+- `feedback`은 현재 in-memory 요약 count만 제공한다. finding acknowledge/false-positive
+  쓰기 API는 아직 없다.
+- 알 수 없는 필드, 잘못된 타입, 범위를 벗어난 값, 존재하지 않는 `project_root`는
+  `400 bad_request`다. `settings`는 `GET`과 `PATCH`만 허용한다.
 
 ## Accuracy boundary
 
