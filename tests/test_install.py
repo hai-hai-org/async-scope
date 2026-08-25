@@ -207,3 +207,52 @@ def test_unsupported_reason():
     assert unsupported_reason((3, 13, 0), "cpython") is None
     assert "3.12" in unsupported_reason((3, 11, 9), "cpython")
     assert "pypy" in unsupported_reason((3, 13, 0), "pypy")
+
+
+async def test_request_without_a_response_is_recorded_as_disconnected():
+    """응답을 시작하지 못하고 끝난 request. contracts/fixtures/disconnect.json의 계약이다.
+
+    uvicorn HTTP에서는 client가 끊어도 handler가 끝까지 돌아 이 경로가 실제로는 안 나온다
+    (contracts/README.md 알려진 경계). 하지만 RequestTracker는 순수 ASGI라 응답을 시작하지
+    않고 끝나는 app이면 여기로 온다. 지금까지 outcome()만 단위 테스트돼 있었다.
+
+    httpx를 거치지 않고 ASGI를 직접 호출한다. 응답이 없는 요청은 transport 계층에서
+    먼저 막혀서 middleware까지 닿지 않는다.
+    """
+
+    async def silent_app(app_scope, receive, send):
+        """client가 끊어서 응답을 시작하지 못하고 끝난다."""
+        assert (await receive())["type"] == "http.disconnect"
+
+    scope = AsyncScope(silent_app, project_root=ROOT).install()
+    try:
+        await scope(
+            {"type": "http", "method": "GET", "path": "/never-responds", "headers": []},
+            _disconnect_receive,
+            _drop_send,
+        )
+        events = list(scope.events)
+    finally:
+        scope.uninstall()
+
+    end = next(event for event in events if event["type"] == "request.end")
+    assert end["status"] == "disconnected"
+    assert end["status_code"] is None
+    assert not any(event["type"] == "response.start" for event in events)
+
+    fixture = json.loads(
+        (ROOT / "contracts" / "fixtures" / "disconnect.json").read_text()
+    )
+    expected = next(
+        event for event in fixture["events"] if event["type"] == "request.end"
+    )
+    for field in ("status", "status_code", "category", "label", "disconnect_reason"):
+        assert end[field] == expected[field], field
+
+
+async def _disconnect_receive():
+    return {"type": "http.disconnect"}
+
+
+async def _drop_send(message):
+    raise AssertionError(f"응답을 보내면 안 되는 경로다: {message}")
