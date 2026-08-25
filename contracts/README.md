@@ -96,6 +96,7 @@ data: {"error":"event_gap","cursor":0,"first_sequence":2,"last_sequence":10,"dro
 | TimeDistribution | request detail의 `time_distribution` |
 | Source viewer | `GET /__asyncscope__/api/source` |
 | Analyzer finding | `GET /__asyncscope__/api/findings` |
+| AppShell MetricCard | `GET /__asyncscope__/api/summary` |
 | Evidence legend | `evidence`, `confidence`, `category`, `label` |
 
 ## Requests query API
@@ -208,6 +209,55 @@ request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진�
 없는 파일과 거부된 경로를 구분해 알려 주지 않는다. 구분 자체가 root 안 디렉터리 구조를
 흘린다. 절대 경로는 응답에 넣지 않는다.
 
+## Summary metrics API
+
+AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않고 같은 event buffer에서
+파생한다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/summary` | request rate, active requests, loop delay, blocking count, server time |
+
+`window`는 초 단위이고 기본 60, 최대 3600이다. 잘못된 값은 `400 bad_request`다.
+
+```json
+{
+  "server_time": "2026-08-25T05:31:02.160451+00:00",
+  "tracing": true,
+  "window_ns": 60000000000,
+  "measured_window_ns": 405468125,
+  "request_rate_per_second": 4.933,
+  "active_requests": 0,
+  "loop_delay": {
+    "average_ns": 301426375,
+    "max_ns": 301426375,
+    "samples": 1,
+    "threshold_ns": 50000000
+  },
+  "blocking_count": 1,
+  "buffer": {
+    "events": 11,
+    "max_events": 1000,
+    "dropped_count": 0,
+    "first_sequence": 1,
+    "last_sequence": 11
+  }
+}
+```
+
+- `server_time`은 벽시계(UTC ISO 8601)다. 이벤트의 `timestamp_ns`는 `perf_counter_ns`라
+  벽시계가 아니다. 둘을 섞어 계산하지 않는다.
+- `measured_window_ns`는 ring buffer가 실제로 덮은 구간이다. rate는 `window_ns`가 아니라
+  이 값으로 나눈다. 버퍼가 60초를 못 덮는데 60으로 나누면 rate가 실제보다 낮게 나온다.
+- 잴 구간이 없으면 `request_rate_per_second`는 `0`이 아니라 `null`이다. 요청이 없던 것과
+  잴 수 없는 것은 다르다. window 안에 요청이 없었을 뿐이면 `0.0`이다.
+- `active_requests`는 window로 자르지 않는다. window 전에 시작해 아직 도는 request가
+  빠지면 안 된다.
+- `buffer` 블록의 필드 이름은 SSE `asyncscope.gap` payload와 같다.
+- `tracing`은 `install()` 여부다. `stale`은 서버가 판정하지 않는다 — 응답은 항상 방금
+  계산한 값이고, poll 실패나 SSE 끊김은 client만 안다. UI는 `tracing: false`를
+  `unavailable`로, 자기 연결 상태를 `stale`로 그린다.
+
 ## Accuracy boundary
 
 - `observed` means the event came from `sys.monitoring`, ASGI lifecycle, or an
@@ -217,6 +267,9 @@ request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진�
 - Unsupported awaits use `category: "await"` and `label: "unknown await"`.
   They must not be labeled DB, HTTP, Redis, or WebSocket without adapter
   evidence.
+- `loop_delay.average_ns`는 threshold를 **넘어 검출된** 지연의 평균이다. heartbeat는
+  threshold 이하 sample을 이벤트로 남기지 않으므로 전체 평균은 계산할 수 없다. 소비자가
+  무엇의 평균인지 알 수 있도록 `samples`와 `threshold_ns`를 함께 반환한다.
 - `loop.blocked` in M0 is an unattributed delay. The collector must not attach
   a `suspect` or otherwise name a culprit from heartbeat timing alone. 전체 stream을
   가진 분석 단계는 침묵 구간 직전 프레임을 후보로 제시할 수 있지만
