@@ -56,6 +56,17 @@ class RequestTracker:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message["status"]
+                # Timeline의 Response 구간은 여기서 시작한다. request.end만으로는
+                # 응답이 언제 나가기 시작했는지 알 수 없다.
+                emit(
+                    "response.start",
+                    status_code=status_code,
+                    category="response",
+                    label=f"HTTP {status_code}",
+                )
+            # ponytail: http.response.body는 기록하지 않는다. 마지막 body의 시각은
+            # request.end와 사실상 같아서 구간이 생기지 않는다. streaming 응답의
+            # chunk별 시각이 필요해지면 그때 more_body를 보고 추가한다.
             await send(message)
 
         try:

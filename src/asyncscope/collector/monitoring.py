@@ -10,10 +10,12 @@ import asyncio
 import contextlib
 import contextvars
 import io
+import itertools
 import json
 import os
 import sys
 import time
+import weakref
 from pathlib import Path
 
 CO_COROUTINE = 0x0080
@@ -56,6 +58,29 @@ TASK_ID_ATTR = "_asyncscope_task_id"
 _prefix: str | None = None
 _out = None
 
+_span_counter = itertools.count(1)
+# Task별 (실행 중, 중단됨) span 스택. Task가 죽으면 stdlib이 항목을 지우므로 정리 코드가
+# 필요 없다. tasks.py의 done callback은 프로젝트 Task에만 붙어서 여기 쓸 수 없다.
+_spans: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+# Task 밖에서 도는 coroutine용 fallback (lifespan, 직접 await).
+_taskless: tuple[list, list] = ([], [])
+
+
+def _new_span(started_ns: int | None) -> tuple[str, int | None]:
+    """started_ns가 None이면 시작 시각을 관측하지 못한 span이다 (duration을 만들지 않는다)."""
+    return (f"span-{next(_span_counter)}", started_ns)
+
+
+def _stacks(task) -> tuple[list, list]:
+    """(active, parked). active는 실행 중인 프레임, parked는 await에서 중단된 프레임이다."""
+    if task is None:
+        return _taskless
+    pair = _spans.get(task)
+    if pair is None:
+        pair = ([], [])
+        _spans[task] = pair
+    return pair
+
 
 def task_id(task) -> str | None:
     """tasks.py의 factory가 붙인 안정적 id. factory가 없었으면 None."""
@@ -85,6 +110,11 @@ def emit(event_type: str, **fields) -> None:
 
     request_id는 contextvar에서 읽는다. heartbeat Task는 request 밖에서 만들어지므로
     loop.blocked가 남의 request를 상속하지 않는다.
+
+    ponytail: 기본 sink(EventBufferSink)는 여기서 dumps한 줄을 곧바로 loads해서 dict로
+    되돌린다. 실측 ~2.5µs/event 중 ~1.4µs가 이 왕복이다. `_out`에 append가 있으면 row를
+    그대로 넘기는 분기 하나로 사라지지만 buffer는 z 소유라 Day 11 오버헤드 측정 때 같이
+    정한다. 지금 ratio는 1.1x 수준이라 급하지 않다.
     """
     if _out is not None:
         row = {
@@ -116,6 +146,31 @@ def _record(name: str, code):
     except RuntimeError:
         task = None
     event_type, category, label = _NORMALIZED[name]
+    # span = 프로젝트 coroutine 프레임 1회 실행. sys.monitoring이 프레임 정체성을 주지
+    # 않으므로 Task별 스택으로 잇는다 — await 체인은 Task 안에서 항상 well-nested다.
+    # 중단은 안->밖, 재개는 밖->안 캐스케이드라 pop/push 순서가 그대로 맞는다.
+    stack, parked = _stacks(task)
+    now_ns = time.perf_counter_ns()
+    duration_ns = None
+    if name == "PY_START":
+        parent = stack[-1][0] if stack else None
+        entry = _new_span(now_ns)
+        stack.append(entry)
+    elif name == "PY_RESUME":
+        parent = stack[-1][0] if stack else None
+        # parked가 비었으면 tracing 시작 전에 중단된 프레임이다. 시작 시각을 모른다.
+        entry = parked.pop() if parked else _new_span(None)
+        stack.append(entry)
+    else:
+        # stack이 비면 tracing 시작 전에 진입한 프레임이다. 그래도 span을 발급해 스택
+        # 균형을 맞춘다 — 여기서 건너뛰면 중단 캐스케이드의 자리가 하나 비어서, 바깥
+        # 프레임의 resume이 안쪽 프레임의 span을 집어간다.
+        entry = stack.pop() if stack else _new_span(None)
+        parent = stack[-1][0] if stack else None
+        if name == "PY_YIELD":
+            parked.append(entry)
+        elif entry[1] is not None:  # PY_RETURN, 시작을 관측한 span만 duration을 낸다
+            duration_ns = now_ns - entry[1]
     # ponytail: suspend는 무엇을 await하는지 모른다. PY_YIELD의 code object는 yield하는
     # 쪽이고 awaitee가 아니다. 지원 adapter label은 classifiers/awaits.py에서 붙인다.
     library = {"library": None} if category == "await" else {}
@@ -123,11 +178,35 @@ def _record(name: str, code):
     emit(
         event_type,
         task_id=task_id(task) if task else None,
+        span_id=entry[0],
+        parent_span_id=parent,
+        duration_ns=duration_ns,
         source=source,
         category=category,
         label=label.format(name=code.co_qualname),
         **library,
     )
+
+
+def _unwind(code) -> None:
+    """예외로 빠져나간 프레임은 PY_RETURN이 오지 않는다. 스택만 회수하고 이벤트는 남기지 않는다.
+
+    회수하지 않으면 그 뒤 형제 span의 parent가 죽은 프레임을 가리킨다.
+
+    ponytail: PY_UNWIND는 DISABLE할 수 없어서(`Cannot disable PY_UNWIND events`)
+    다른 event처럼 최초 1회로 비용을 끝낼 수 없다. 대신 co_flags 검사 하나로 coroutine이
+    아닌 프레임을 즉시 걸러낸다. 예외 전파가 잦은 앱에서 비용이 보이면 프로젝트 code
+    object에만 set_local_events로 켜는 방향으로 올린다.
+    """
+    if _prefix is None or not (code.co_flags & CO_COROUTINE) or relative_source(code) is None:
+        return
+    try:
+        task = asyncio.current_task()
+    except RuntimeError:
+        task = None
+    stack, _ = _stacks(task)
+    if stack:
+        stack.pop()
 
 
 def start(project_root: str | Path, out) -> None:
@@ -144,6 +223,10 @@ def start(project_root: str | Path, out) -> None:
         )
     _prefix = str(Path(project_root).resolve()) + os.sep
     _out = out
+    # 이전 session의 스택이 남아 있으면 span 부모가 엉킨다.
+    _spans.clear()
+    _taskless[0].clear()
+    _taskless[1].clear()
     m.restart_events()  # 이전 실행에서 DISABLE된 location을 되살린다
     m.use_tool_id(_TOOL_ID, "asyncscope")
     mask = 0
@@ -151,6 +234,9 @@ def start(project_root: str | Path, out) -> None:
         event = getattr(m.events, name)
         mask |= event
         m.register_callback(_TOOL_ID, event, lambda *a, _n=name: _record(_n, a[0]))
+    # PY_UNWIND는 이벤트를 만들지 않는다 (계약에 없다). span 스택 회수 전용이다.
+    mask |= m.events.PY_UNWIND
+    m.register_callback(_TOOL_ID, m.events.PY_UNWIND, lambda *a: _unwind(a[0]))
     m.set_events(_TOOL_ID, mask)
 
 
@@ -160,7 +246,7 @@ def stop() -> None:
         return
     m = sys.monitoring
     m.set_events(_TOOL_ID, 0)
-    for name in _NORMALIZED:
+    for name in (*_NORMALIZED, "PY_UNWIND"):
         m.register_callback(_TOOL_ID, getattr(m.events, name), None)
     m.free_tool_id(_TOOL_ID)
     _prefix, _out = None, None

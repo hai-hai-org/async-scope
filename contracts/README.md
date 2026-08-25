@@ -9,6 +9,7 @@ M0의 목적은 `sys.monitoring` 수집 방식이 제품에서 사용할 수 있
 | Source signal | Normalized event | Meaning |
 | --- | --- | --- |
 | `request.start` | `request.start` | HTTP request lifecycle 시작 |
+| `http.response.start` | `response.start` | 응답 전송 시작 (Timeline의 Response 구간 시작점) |
 | `request.end` | `request.end` | HTTP request lifecycle 종료 |
 | `PY_START` | `coroutine.start` | 프로젝트 coroutine 실행 시작 |
 | `PY_YIELD` | `coroutine.suspend` | coroutine이 `await` 지점에서 중단 |
@@ -30,9 +31,10 @@ M0의 목적은 `sys.monitoring` 수집 방식이 제품에서 사용할 수 있
 | `span_id` | span에 속하지 않으면 `null` |
 | `parent_span_id` | root span 또는 span 외 이벤트면 `null` |
 | `source` | project-relative Python source location 또는 `null` |
-| `duration_ns` | 종료/구간 이벤트가 아니면 `null` |
+| `duration_ns` | 종료/구간 이벤트가 아니면 `null`. tracing 시작 전에 진입한 프레임처럼 시작 시각을 관측하지 못한 종료 이벤트도 `null`이다 — 추정값을 넣지 않는다. |
 | `evidence` | `observed` 또는 `inferred` |
 | `confidence` | `observed`이면 `null`, 추론이면 0~1 number |
+| `sequence` | storage가 보관 시점에 부여하는 transport metadata. collector는 emit하지 않는다. |
 
 Event-specific fields such as `method`, `path`, `status_code`, `category`,
 `label`, `library`, `delay_ns`, `threshold_ns`, `status`, `parent_task_id`,
@@ -43,7 +45,7 @@ consume fixtures without depending on collector internals.
 
 | Consumer | Reads |
 | --- | --- |
-| Timeline request lane | `request.start`, `request.end` |
+| Timeline request lane | `request.start`, `response.start`, `request.end` |
 | Timeline coroutine segment | `coroutine.start`, `coroutine.suspend`, `coroutine.resume`, `coroutine.end` |
 | Background Task lane | `task.start`, `task.end`, `task.cancel` |
 | Blocking marker | `loop.blocked` |
@@ -93,10 +95,10 @@ fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또�
 
 | 필드 | 지금 나오는 값 | 언제 채워지는가 |
 | --- | --- | --- |
-| `span_id`, `parent_span_id` | `null` | span tree 작업 |
-| `duration_ns` | `request.end`, `loop.blocked`, `task.end`, `task.cancel`만 채운다 | span tree 작업 (coroutine 구간) |
+| `span_id`, `parent_span_id` | 프로젝트 coroutine 이벤트에 채워진다. request/response/task/loop 이벤트는 `null` | 완료 |
+| `duration_ns` | `request.end`, `loop.blocked`, `task.end`, `task.cancel`, `coroutine.end` | 완료 |
 | `coroutine.suspend`의 `label`, `library` | `"unknown await"`, `null` | adapter classifier 작업 |
-| `coroutine.end`의 `category` | 항상 `"running"` | `PY_UNWIND`/`PY_THROW` 수집 |
+| 예외로 끝난 coroutine | `coroutine.end`가 나오지 않는다 (`PY_UNWIND`는 span 스택 회수에만 쓴다) | 별도 결정 필요 |
 | `request.end`의 `status: "disconnected"` | 실제로 나오지 않는다 (아래 참고) | 별도 결정 필요 |
 
 `task_id`는 collector가 부여하는 `task-<n>`이다. Task 이름(`Task-7`)은 loop가 붙이는 순번이고

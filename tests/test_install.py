@@ -99,6 +99,48 @@ async def test_uninstalled_default_buffer_stops_growing(demo_app):
     assert len(scope.events) == before, "tracing을 끈 뒤에도 buffer가 증가했다"
 
 
+async def test_response_start_sits_between_request_start_and_end(demo_app):
+    """Timeline의 Response 구간 시작점. request.end만으로는 알 수 없다."""
+    out = io.StringIO()
+    traced = AsyncScope(demo_app, project_root=ROOT, out=out).install()
+    try:
+        response = await _get(traced, "/demo/quick")
+    finally:
+        traced.uninstall()
+
+    assert response.status_code == 200
+    lifecycle = [
+        row for row in _rows(out)
+        if row["type"] in {"request.start", "response.start", "request.end"}
+    ]
+    assert [row["type"] for row in lifecycle] == [
+        "request.start", "response.start", "request.end",
+    ], lifecycle
+    started, responded, ended = lifecycle
+    assert responded["status_code"] == 200
+    assert responded["category"] == "response"
+    assert started["timestamp_ns"] <= responded["timestamp_ns"] <= ended["timestamp_ns"]
+    assert responded["request_id"] == started["request_id"]
+
+
+async def test_error_response_still_has_response_start(demo_app):
+    """500도 응답은 나간다. request.end가 failed여도 Response 구간은 존재한다."""
+    out = io.StringIO()
+    traced = AsyncScope(demo_app, project_root=ROOT, out=out).install()
+    try:
+        response = await _get(traced, "/demo/failure")
+    finally:
+        traced.uninstall()
+
+    assert response.status_code == 500
+    rows = _rows(out)
+    responded = [row for row in rows if row["type"] == "response.start"]
+    assert [row["status_code"] for row in responded] == [500], responded
+    assert responded[0]["label"] == "HTTP 500"
+    ended = [row for row in rows if row["type"] == "request.end"]
+    assert [row["status"] for row in ended] == ["failed"], ended
+
+
 async def test_install_twice_fails(demo_app):
     traced = AsyncScope(demo_app, project_root=ROOT, out=io.StringIO()).install()
     try:
@@ -136,6 +178,29 @@ async def test_heartbeat_is_not_attributed_to_the_current_request():
     blocked = [row for row in rows if row["type"] == "loop.blocked"]
     assert blocked, "지연을 감지하지 못했다"
     assert all(row["request_id"] is None for row in blocked), blocked
+
+
+async def test_normal_workload_is_not_reported_as_blocking():
+    """짧은 정상 callback이 blocking으로 잡히면 Analyzer 전체가 거짓말이 된다.
+
+    양성(time.sleep)은 위 테스트가 덮는다. 여기는 음성 쪽 경계다.
+
+    ponytail: 벽시계 기준이라 심하게 부하가 걸린 머신에서는 흔들릴 수 있다.
+    흔들리면 threshold를 올리기 전에 왜 50ms가 밀렸는지부터 본다.
+    """
+
+    async def short_callback():
+        for _ in range(100):
+            await asyncio.sleep(0.001)
+            sum(range(2000))  # 실제 handler의 짧은 CPU 구간
+
+    with tracing(ROOT) as rows:
+        heartbeat = loop_collector.start()  # 기본 threshold 50ms, interval 10ms
+        await asyncio.gather(*(short_callback() for _ in range(20)))
+        heartbeat.cancel()
+
+    blocked = [row for row in rows if row["type"] == "loop.blocked"]
+    assert not blocked, blocked
 
 
 def test_unsupported_reason():
