@@ -254,3 +254,86 @@ def test_recommendation_names_the_known_blocking_call_when_source_is_readable(tm
     assert "await asyncio.sleep()" in step["text"]
     # decorator가 붙어 co_firstlineno가 6이어도 실제 호출 줄을 가리킨다.
     assert step["source"] == {"file": "service.py", "line": 8}
+
+
+def test_a_request_that_waits_on_one_await_becomes_an_observed_finding():
+    """loop.blocked가 없어도 느린 request가 있다. 상대가 늦으면 loop은 멀쩡하다."""
+    findings = [
+        finding
+        for finding in build_findings(_events("ui-stress"))
+        if finding["type"] == "long_wait"
+    ]
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding["finding_id"] == "long-wait-req-long"
+    assert finding["severity"] == "high"
+    # blocking과 다르다. suspend/resume을 실제로 봤으므로 후보가 아니라 관측이다.
+    assert finding["evidence"] == "observed"
+    assert finding["confidence"] is None
+    assert finding["suspect"]["certainty"] == "observed"
+    assert finding["suspect"]["source"] is not None
+    assert [ref["request_id"] for ref in finding["affected_requests"]] == ["req-long"]
+
+
+def test_a_short_await_is_not_a_long_wait():
+    """50ms sleep은 문제가 아니다. 하한을 안 걸면 모든 request가 finding이 된다."""
+    assert build_findings(_events("timeline")) == []
+
+
+def test_long_wait_needs_both_a_floor_and_a_share():
+    """구간의 절반 미만이면 그 대기가 request를 설명하지 못한다."""
+    long_enough = 2_000_000_000
+    events = [
+        {
+            "type": "request.start",
+            "timestamp_ns": 0,
+            "request_id": "req-mixed",
+            "method": "GET",
+            "path": "/mixed",
+        },
+        {
+            "type": "coroutine.start",
+            "timestamp_ns": 1,
+            "request_id": "req-mixed",
+            "span_id": "span-1",
+            "source": {"file": "a.py", "function": "handler", "line": 1},
+            "category": "running",
+            "label": "handler()",
+        },
+        {
+            "type": "coroutine.suspend",
+            "timestamp_ns": 2,
+            "request_id": "req-mixed",
+            "span_id": "span-1",
+            "category": "await",
+            "label": "unknown await",
+        },
+        {
+            "type": "coroutine.resume",
+            "timestamp_ns": 2 + long_enough,
+            "request_id": "req-mixed",
+            "span_id": "span-1",
+            "category": "running",
+            "label": "handler() resumed",
+        },
+        {
+            # 대기 뒤에 그보다 훨씬 긴 실행이 이어져 비중이 절반 밑으로 떨어진다.
+            "type": "request.end",
+            "timestamp_ns": 2 + long_enough * 5,
+            "request_id": "req-mixed",
+            "duration_ns": long_enough * 5,
+            "status": "completed",
+            "status_code": 200,
+        },
+    ]
+
+    assert not [f for f in build_findings(events) if f["type"] == "long_wait"]
+
+
+def test_long_wait_is_filterable_by_type():
+    events = _events("ui-stress")
+
+    assert query_findings(events, finding_type="long_wait")["total"] == 1
+    assert query_findings(events, finding_type="blocking,long_wait")["total"] == 2
+    assert query_findings(events, request_id="req-long")["total"] == 1

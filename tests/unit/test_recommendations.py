@@ -117,3 +117,21 @@ def test_syntax_error_in_project_source_does_not_break_the_analyzer(tmp_path):
     _write(tmp_path, "async def handler(:\n")
 
     assert recommend(_finding(line=1), tmp_path)["kind"] == "measure"
+
+
+def test_long_wait_gets_measurement_steps_not_an_asserted_fix():
+    """무엇을 기다렸는지는 label이 말하지만 상대가 왜 느렸는지는 우리가 모른다."""
+    finding = {
+        "type": "long_wait",
+        "suspect": {
+            "source": {"file": "service.py", "function": "handler", "line": 1},
+            "certainty": "observed",
+        },
+    }
+
+    result = recommend(finding, None)
+
+    assert result["kind"] == "measure"
+    assert result["certainty"] == "unknown"
+    assert [step["text"] for step in result["steps"]] == MEASURE_STEPS["long_wait"]
+    assert all(step["source"] is None for step in result["steps"])
