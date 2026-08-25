@@ -13,17 +13,19 @@ from ..analysis import QueryError
 from ..analysis.findings import get_finding, query_findings
 from ..analysis.requests import get_request_detail, query_requests
 from .source import read_snippet
+from .sse import handle_sse
 
 API_PREFIX = "/__asyncscope__/api"
 REQUESTS_PATH = f"{API_PREFIX}/requests"
 FINDINGS_PATH = f"{API_PREFIX}/findings"
 SOURCE_PATH = f"{API_PREFIX}/source"
+EVENTS_PATH = f"{API_PREFIX}/events"
 
 # snippet은 화면에 붙는 문맥이지 파일 뷰어가 아니다.
 MAX_RADIUS = 50
 
 
-async def handle_api(buffer, project_root: str | Path, scope, send) -> bool:
+async def handle_api(buffer, project_root: str | Path, scope, receive, send) -> bool:
     """내부 API 요청이면 응답하고 True를 반환한다."""
 
     if scope["type"] != "http":
@@ -42,6 +44,8 @@ async def handle_api(buffer, project_root: str | Path, scope, send) -> bool:
         await _guarded(send, lambda: query_requests(buffer.snapshot(), **_request_args(params)))
     elif path == FINDINGS_PATH:
         await _guarded(send, lambda: query_findings(buffer.snapshot(), **_finding_args(params)))
+    elif path == EVENTS_PATH:
+        await _handle_events(buffer, params, scope, receive, send)
     elif path == SOURCE_PATH:
         await _handle_source(project_root, params, send)
     elif (request_id := _detail_id(path, REQUESTS_PATH)) is not None:
@@ -110,6 +114,13 @@ async def _handle_source(project_root: str | Path, params: dict[str, list[str]],
         return
 
     await _json_response(send, 200, payload)
+
+
+async def _handle_events(buffer, params: dict[str, list[str]], scope, receive, send) -> None:
+    try:
+        await handle_sse(buffer, params, scope, receive, send)
+    except QueryError as exc:
+        await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
 
 
 async def _guarded(send, query) -> None:

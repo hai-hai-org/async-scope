@@ -54,6 +54,35 @@ consume fixtures without depending on collector internals.
 | `dropped_count` | overflow로 buffer에서 밀려난 이벤트 수 |
 | `cursor_was_dropped(cursor)` | client cursor 이후 필요한 이벤트 일부가 이미 사라졌는지 여부 |
 
+## SSE event stream API
+
+Timeline live update와 reconnect/replay가 소비한다. 내부 API는 target app보다 먼저 처리되므로
+SSE 연결 자체를 tracing event로 남기지 않는다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/events` | event buffer를 Server-Sent Events로 전달 |
+
+cursor는 `cursor` query parameter를 우선 사용하고, 없으면 `Last-Event-ID` header를 쓴다.
+둘 다 없으면 현재 buffer snapshot 전체를 보낸다. `once=true`는 테스트와 초기 replay 확인용으로,
+현재 보낼 수 있는 event 또는 gap만 보내고 연결을 닫는다. 기본 모드는 연결을 유지하며 새 event를
+stream한다.
+
+일반 event frame:
+
+```text
+id: <sequence>
+event: asyncscope.event
+data: <normalized event JSON>
+```
+
+client cursor 이후 필요한 event가 이미 buffer에서 밀렸으면 일반 event 대신 gap frame을 보낸다.
+
+```text
+event: asyncscope.gap
+data: {"error":"event_gap","cursor":0,"first_sequence":2,"last_sequence":10,"dropped_count":1}
+```
+
 ## Consumer mapping
 
 | Consumer | Reads |
