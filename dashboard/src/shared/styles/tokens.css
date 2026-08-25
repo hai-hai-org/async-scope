@@ -1,0 +1,100 @@
+:root {
+  color-scheme: dark;
+  --font-ui: "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas,
+    monospace;
+
+  --surface-canvas: #04111b;
+  --surface-sidebar: #061522;
+  --surface-panel: #091b28;
+  --surface-raised: #0d2231;
+  --surface-hover: #112c3f;
+  --text-primary: #f4f8fb;
+  --text-secondary: #b7c4ce;
+  --text-tertiary: #8394a1;
+  --border-subtle: #142b3a;
+  --border-default: #1c3445;
+  --border-strong: #2a4a60;
+  --accent-primary: #2f80ed;
+  --accent-hover: #5a9bff;
+  --focus-ring: #8bc1ff;
+  --status-success: #43d17a;
+  --status-warning: #ffb020;
+  --status-error: #ff6259;
+  --status-info: #63a4ff;
+
+  --state-running-bg: #154e91;
+  --state-running-fg: #eef5ff;
+  --state-waiting-bg: #7a4b00;
+  --state-waiting-fg: #fff4d5;
+  --state-blocking-bg: #782927;
+  --state-blocking-fg: #ffecea;
+  --state-thread-bg: #563a80;
+  --state-thread-fg: #f5edff;
+  --state-response-bg: #185f36;
+  --state-response-fg: #ebfff2;
+  --state-idle-bg: #344553;
+  --state-idle-fg: #d9e1e7;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --control-sm: 32px;
+  --control-md: 40px;
+  --control-touch: 44px;
+  --sidebar-wide: 192px;
+  --sidebar-compact: 72px;
+  --detail-wide: 388px;
+  --header-height: 60px;
+  --footer-height: 44px;
+
+  --shadow-panel: 0 18px 40px rgb(0 0 0 / 24%);
+  --shadow-drawer: 0 24px 60px rgb(0 0 0 / 40%);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface-canvas: #f2f6f9;
+  --surface-sidebar: #ffffff;
+  --surface-panel: #ffffff;
+  --surface-raised: #f8fafc;
+  --surface-hover: #eaf1f6;
+  --text-primary: #10202f;
+  --text-secondary: #4c6174;
+  --text-tertiary: #6f8190;
+  --border-subtle: #e3eaf0;
+  --border-default: #cfdae3;
+  --border-strong: #aebfcc;
+  --accent-primary: #1b66d1;
+  --accent-hover: #1454b2;
+  --focus-ring: #0b57d0;
+  --status-success: #167a3b;
+  --status-warning: #9a5a00;
+  --status-error: #b4231b;
+  --status-info: #1559b5;
+
+  --state-running-bg: #ddebff;
+  --state-running-fg: #0b417f;
+  --state-waiting-bg: #fff0c7;
+  --state-waiting-fg: #694000;
+  --state-blocking-bg: #ffe2df;
+  --state-blocking-fg: #7c211d;
+  --state-thread-bg: #efe5ff;
+  --state-thread-fg: #4c2c78;
+  --state-response-bg: #dcf7e6;
+  --state-response-fg: #11572d;
+  --state-idle-bg: #e6ebef;
+  --state-idle-fg: #445460;
+
+  --shadow-panel: 0 18px 40px rgb(16 32 47 / 12%);
+  --shadow-drawer: 0 24px 60px rgb(16 32 47 / 20%);
+}
