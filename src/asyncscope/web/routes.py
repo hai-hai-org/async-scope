@@ -6,11 +6,14 @@ FastAPI를 runtime dependency로 만들지 않기 위해 순수 ASGI로 처리�
 from __future__ import annotations
 
 import json
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qs, unquote
 
 from ..analysis import QueryError
 from ..analysis.findings import get_finding, query_findings
+from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
 from .source import read_snippet
 from .sse import handle_sse
@@ -20,13 +23,18 @@ REQUESTS_PATH = f"{API_PREFIX}/requests"
 FINDINGS_PATH = f"{API_PREFIX}/findings"
 SOURCE_PATH = f"{API_PREFIX}/source"
 EVENTS_PATH = f"{API_PREFIX}/events"
+SUMMARY_PATH = f"{API_PREFIX}/summary"
 
 # snippet은 화면에 붙는 문맥이지 파일 뷰어가 아니다.
 MAX_RADIUS = 50
 
 
-async def handle_api(buffer, project_root: str | Path, scope, receive, send) -> bool:
-    """내부 API 요청이면 응답하고 True를 반환한다."""
+async def handle_api(app_scope, scope, receive, send) -> bool:
+    """내부 API 요청이면 응답하고 True를 반환한다.
+
+    AsyncScope 인스턴스를 통째로 받는다. buffer, project_root, tracing 상태를 각각
+    인자로 늘리면 endpoint를 더할 때마다 시그니처가 자란다.
+    """
 
     if scope["type"] != "http":
         return False
@@ -39,6 +47,7 @@ async def handle_api(buffer, project_root: str | Path, scope, receive, send) -> 
         await _json_response(send, 405, {"error": "method_not_allowed"})
         return True
 
+    buffer = app_scope.buffer
     params = _query_params(scope)
     if path == REQUESTS_PATH:
         await _guarded(send, lambda: query_requests(buffer.snapshot(), **_request_args(params)))
@@ -46,8 +55,10 @@ async def handle_api(buffer, project_root: str | Path, scope, receive, send) -> 
         await _guarded(send, lambda: query_findings(buffer.snapshot(), **_finding_args(params)))
     elif path == EVENTS_PATH:
         await _handle_events(buffer, params, scope, receive, send)
+    elif path == SUMMARY_PATH:
+        await _guarded(send, lambda: _summary(app_scope, params))
     elif path == SOURCE_PATH:
-        await _handle_source(project_root, params, send)
+        await _handle_source(app_scope.project_root, params, send)
     elif (request_id := _detail_id(path, REQUESTS_PATH)) is not None:
         await _detail_response(send, get_request_detail(buffer.snapshot(), request_id))
     elif (finding_id := _detail_id(path, FINDINGS_PATH)) is not None:
@@ -78,6 +89,33 @@ def _finding_args(params: dict[str, list[str]]) -> dict:
         "request_id": params.get("request_id"),
         "page": _one(params, "page", "1"),
         "page_size": _one(params, "page_size", "50"),
+    }
+
+
+def _summary(app_scope, params: dict[str, list[str]]) -> dict:
+    """metrics 계산은 analysis가, 벽시계와 buffer 상태는 여기가 담당한다.
+
+    `stale`은 서버가 판정하지 않는다. 응답은 항상 방금 계산한 값이고, poll 실패나 SSE
+    끊김은 client만 안다. 서버는 tracing이 켜져 있는지만 알려 준다.
+    """
+    buffer = app_scope.buffer
+    payload = summarize(
+        buffer.snapshot(),
+        now_ns=time.perf_counter_ns(),
+        window_s=_one(params, "window", str(DEFAULT_WINDOW_S)),
+    )
+    return {
+        # 이벤트의 timestamp_ns는 perf_counter_ns라 벽시계가 아니다. 둘을 섞지 않는다.
+        "server_time": datetime.now(UTC).isoformat(),
+        "tracing": app_scope.installed,
+        **payload,
+        "buffer": {
+            "events": len(buffer),
+            "max_events": buffer.max_events,
+            "dropped_count": buffer.dropped_count,
+            "first_sequence": buffer.first_sequence,
+            "last_sequence": buffer.last_sequence,
+        },
     }
 
 

@@ -201,3 +201,52 @@ async def test_source_api_serves_the_project_file_a_finding_points_at(demo_app):
     assert snippet.status_code == 200
     assert snippet.json()["file"] == suspect["source"]["file"]
     assert escape.status_code == 403
+
+
+async def test_summary_api_reports_live_metrics_without_tracing_itself(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            # heartbeat가 첫 주기에 들어가기 전에 막으면 잴 지연 자체가 없다.
+            await asyncio.sleep(0.05)
+            await client.get("/demo/quick")
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+
+            before = len(scope.events)
+            response = await client.get("/__asyncscope__/api/summary")
+            after = len(scope.events)
+
+            invalid = await client.get(
+                "/__asyncscope__/api/summary", params={"window": "99999"}
+            )
+    finally:
+        scope.uninstall()
+
+    assert response.status_code == 200
+    assert after == before, "내부 API 호출이 대상 앱 tracing event가 되면 안 된다"
+
+    summary = response.json()
+    assert summary["tracing"] is True
+    assert summary["request_rate_per_second"] > 0
+    assert summary["blocking_count"] >= 1
+    assert summary["loop_delay"]["samples"] >= 1
+    assert summary["loop_delay"]["average_ns"] >= summary["loop_delay"]["threshold_ns"]
+    assert summary["buffer"]["events"] == len(scope.events)
+    assert summary["buffer"]["last_sequence"] is not None
+
+    assert invalid.status_code == 400
+    assert invalid.json()["error"] == "bad_request"
+
+
+async def test_summary_api_says_tracing_is_off_before_install(demo_app):
+    """빈 값이 idle 때문인지 tracing이 꺼져서인지 UI가 구분할 수 있어야 한다."""
+    scope = AsyncScope(demo_app, project_root=ROOT)  # install()하지 않는다
+    transport = httpx.ASGITransport(app=scope)
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+        summary = (await client.get("/__asyncscope__/api/summary")).json()
+
+    assert summary["tracing"] is False
+    assert summary["request_rate_per_second"] is None
+    assert summary["buffer"]["events"] == 0
