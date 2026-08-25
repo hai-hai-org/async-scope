@@ -53,7 +53,7 @@ consume fixtures without depending on collector internals.
 | `last_sequence` | 현재 buffer에 남아 있는 가장 최신 이벤트 sequence |
 | `dropped_count` | overflow로 buffer에서 밀려난 이벤트 수 |
 | `source` | 남아 있는 이벤트의 출처. `live` \| `replay` \| `mixed` |
-| `cursor_was_dropped(cursor)` | client cursor 이후 필요한 이벤트 일부가 이미 사라졌는지 여부 |
+| `cursor_was_dropped(cursor)` | client cursor로 이어서 받을 수 없는 상태인지 여부 |
 
 `source`는 **남아 있는 이벤트**로 판정한다. bool 하나로는 안 된다 — replay된 이벤트가 ring
 buffer에서 전부 밀려나면 buffer는 다시 `live`다.
@@ -114,8 +114,8 @@ export payload:
 - `status`는 여전히 `running`이다. collector 상태와 데이터 출처는 다른 축이다 — tracing이
   돌면서 replay 데이터를 갖는 상태가 실제로 존재하므로 하나의 값으로 둘을 말할 수 없다
 - `sequence`가 1부터 다시 시작하므로 **연결돼 있던 SSE client의 cursor가 새 sequence보다
-  커진다.** `cursor_was_dropped()`가 `False`라 gap 이벤트도 나가지 않고 client는 조용히
-  아무것도 받지 못한다. replay 후에는 client가 cursor 없이 다시 연결해야 한다
+  커진다.** `cursor_was_dropped()`가 이 경우를 잡아 gap frame을 보내므로 client는 stream이
+  끊긴 것을 알 수 있다. cursor 없이 다시 연결하면 새 buffer를 처음부터 받는다
 
 ## SSE event stream API
 
@@ -139,12 +139,27 @@ event: asyncscope.event
 data: <normalized event JSON>
 ```
 
-client cursor 이후 필요한 event가 이미 buffer에서 밀렸으면 일반 event 대신 gap frame을 보낸다.
+cursor로 이어서 받을 수 없으면 일반 event 대신 gap frame을 보낸다.
 
 ```text
 event: asyncscope.gap
 data: {"error":"event_gap","cursor":0,"first_sequence":2,"last_sequence":10,"dropped_count":1}
 ```
+
+gap 조건은 둘이다.
+
+| 조건 | 언제 |
+| --- | --- |
+| `cursor < first_sequence - 1` | cursor 이후 필요한 event가 buffer 상한을 넘어 밀려났다 |
+| `cursor > last_sequence` | `POST /replay`가 buffer를 교체하며 sequence를 1부터 다시 부여했다 |
+
+두 번째는 건강한 live stream에서 일어날 수 없다 — cursor는 서버가 보낸 id에서 오고 sequence는
+단조 증가하므로 항상 `cursor <= last_sequence`다. 그 부등식이 깨졌다는 것 자체가 buffer가
+교체됐다는 신호다. buffer가 비어 있는데(`clear()` 직후, 재시작 후) cursor가 있는 경우도 같다.
+
+**client가 할 일은 두 경우 모두 같다: cursor 없이 재연결한다.** 그래서 payload에 원인을
+구분하는 필드를 두지 않았다. 문구를 다르게 하려면 `dropped_count`와 `cursor`/`last_sequence`
+관계로 구분할 수 있다.
 
 ## Consumer mapping
 
