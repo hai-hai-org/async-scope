@@ -539,12 +539,22 @@ fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또�
 adapter 진입점을 감싸 실제 호출을 관측하므로 `evidence`는 `observed`, `confidence`는 `null`이다.
 `library`당 진입점 하나로 시작한다.
 
-| `library` | 관측 지점 | `label` |
-| --- | --- | --- |
-| `asyncpg` | `Connection.fetch` | `await asyncpg fetch` |
-| `httpx` | `AsyncClient.request` | `await HTTPX request` |
-| `redis.asyncio` | `Redis.execute_command` | `await Redis command` |
-| `websockets` | `Connection.recv` (asyncio/legacy 양쪽) | `await WebSocket receive` |
+| `library` | 최소 version | 관측 지점 | `label` |
+| --- | --- | --- | --- |
+| `asyncpg` | 0.30 | `Connection.fetch` | `await asyncpg fetch` |
+| `httpx` | 0.27 | `AsyncClient.request` | `await HTTPX request` |
+| `redis.asyncio` | 5.0 | `Redis.execute_command` | `await Redis command` |
+| `websockets` | 13.0 | `Connection.recv` (asyncio/legacy 양쪽) | `await WebSocket receive` |
+
+**하한만 있고 상한은 없다.** "이 version 이상에서 진입점 이름을 확인했다"는 뜻이다. 상한을
+적으면 새 version이 나올 때마다 거짓이 된다.
+
+하한 미만이 설치되면 진입점 이름이 다를 수 있고, 그때 **label이 조용히 안 붙는다** —
+`unknown await` / `library: null`로 남을 뿐 오탐을 내지는 않는다. 그래서 runtime에서
+version을 검사하지 않는다. 남의 앱 시작 비용과 로그를 늘리지 않는 쪽을 택했다. 값은
+`classifiers/awaits.py`의 `SUPPORTED_VERSIONS`에 있고 `pyproject.toml`의 dev 의존성 하한과
+같으며, `tests/unit/test_classifiers.py`가 설치본이 하한 이상인지와 adapter마다 version이
+선언됐는지를 검사한다.
 
 목록 밖의 await는 `label: "unknown await"` / `library: null`로 남는다. 추측해서 이름 붙이지 않는다.
 

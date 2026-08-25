@@ -9,7 +9,9 @@ import contextlib
 import importlib
 import inspect
 import json
+import re
 import warnings
+from importlib import metadata
 from pathlib import Path
 
 import httpx
@@ -240,3 +242,42 @@ def test_adapter_fixture_matches_the_registry():
     }
     assert labeled, "adapter fixture에 labeled suspend가 없다"
     assert labeled == {library: registry[library] for library in labeled}
+
+
+# library -> 배포 이름. redis.asyncio는 redis 배포에 들어 있다.
+DISTRIBUTIONS = {
+    "asyncpg": "asyncpg",
+    "httpx": "httpx",
+    "redis.asyncio": "redis",
+    "websockets": "websockets",
+}
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    """ponytail: 선행 숫자 3개만 본다. packaging을 runtime 의존성으로 들이지 않는다
+    (`dependencies = []`가 이 프로젝트의 전제다). rc/dev suffix 비교가 필요해지면 그때 올린다.
+    """
+    return tuple(int(part) for part in re.findall(r"\d+", text)[:3])
+
+
+def test_every_adapter_declares_a_supported_version():
+    """adapter를 추가하고 version을 빼먹으면 계약이 조용히 빈다."""
+    assert set(awaits.SUPPORTED_VERSIONS) == {row[3] for row in awaits.ADAPTERS}
+
+    for library, minimum in awaits.SUPPORTED_VERSIONS.items():
+        assert _version_tuple(minimum), f"{library}의 하한 {minimum!r}을 읽을 수 없다"
+
+
+@pytest.mark.parametrize("library", sorted(LIBRARIES))
+def test_installed_adapter_meets_the_supported_minimum(library):
+    """하한보다 낮은 version에서는 진입점 이름이 다를 수 있다. label이 조용히 안 붙는다."""
+    distribution = DISTRIBUTIONS[library]
+    try:
+        installed = metadata.version(distribution)
+    except metadata.PackageNotFoundError:
+        pytest.skip(f"{distribution} 미설치")
+
+    minimum = awaits.SUPPORTED_VERSIONS[library]
+    assert _version_tuple(installed) >= _version_tuple(minimum), (
+        f"{library} {installed} < 지원 하한 {minimum}"
+    )

@@ -21,8 +21,8 @@ DEMO = "examples/demo.py"
 
 
 def _function(row):
-    """normalized event의 source 함수명. source가 없는 이벤트는 None."""
-    return (row.get("source") or {}).get("function")
+    """normalized event의 source 함수명. row나 source가 없으면 None."""
+    return ((row or {}).get("source") or {}).get("function")
 
 
 async def _request(app, *paths):
@@ -121,13 +121,35 @@ async def test_heartbeat_detects_blocking(app):
     assert all("suspect" not in r for r in blocked), "collector가 원인을 지목하면 안 된다"
 
 
-def _culprit(rows, blocked):
-    """침묵 구간 직전의 project coroutine. 원인 추정은 stream을 다 가진 쪽이 한다."""
+async def _wait_until_loop_stalled(threshold: float = 0.1, timeout: float = 5.0):
+    """loop이 실제로 막혔다 풀릴 때까지 기다린다.
+
+    고정 sleep으로 "blocking이 이미 time.sleep에 들어갔다"를 가정하면 부하에서 어긋난다.
+    그러면 뒤따르는 요청의 프레임이 침묵 구간 **앞**에 들어가 culprit으로 잡힌다.
+    """
+    deadline = time.perf_counter() + timeout
+    while time.perf_counter() < deadline:
+        before = time.perf_counter()
+        await asyncio.sleep(0)
+        if time.perf_counter() - before > threshold:
+            return
+    raise AssertionError("loop이 막히지 않았다")
+
+
+def _culprit(rows, blocked, file=DEMO):
+    """침묵 구간 직전의 project coroutine. 원인 추정은 stream을 다 가진 쪽이 한다.
+
+    대상 앱 파일로 좁힌다. 이 테스트 파일도 project root 안이라 harness의 프레임까지
+    후보가 되면 "앱 안에서 누구를 지목하는가"를 검사할 수 없다.
+    """
     before = [
         r for r in rows
-        if _function(r) and r["timestamp_ns"] <= blocked["gap_start_ns"]
+        if _function(r)
+        and (r["source"] or {}).get("file") == file
+        and r["timestamp_ns"] <= blocked["gap_start_ns"]
     ]
     return before[-1] if before else None
+
 
 
 async def test_blocking_is_attributed_to_the_right_coroutine(app):
@@ -140,7 +162,7 @@ async def test_blocking_is_attributed_to_the_right_coroutine(app):
         hb = loop_collector.start()
         await asyncio.sleep(0.05)
         slow = asyncio.create_task(_request(app, "/demo/blocking"))
-        await asyncio.sleep(0.01)
+        await _wait_until_loop_stalled()
         await _request(app, "/demo/quick")  # 해제 직후 실행되어 오탐을 유도한다
         await slow
         await asyncio.sleep(0.05)
@@ -148,8 +170,18 @@ async def test_blocking_is_attributed_to_the_right_coroutine(app):
 
     blocked = next(r for r in rows if r["type"] == "loop.blocked")
     culprit = _culprit(rows, blocked)
-    assert culprit is not None, "침묵 구간 직전 이벤트를 찾지 못했다"
-    assert _function(culprit) == "blocking", culprit
+
+    # 핵심은 오탐 방지다. heartbeat는 sampling이라 gap_start_ns가 blocking() 시작보다
+    # 이를 수 있고, 그때 후보가 없는 것은 정상이다 (findings._suspect도 None을 낸다).
+    # 절대 안 되는 건 지연이 끝난 뒤 처리된 요청을 지목하는 것이다.
+    assert _function(culprit) != "quick", culprit
+    if culprit is not None:
+        assert _function(culprit) == "blocking", culprit
+
+    # 검사가 공허하지 않은지: quick이 실제로 실행됐고 그 프레임은 전부 침묵 구간 뒤다.
+    quick = [r for r in rows if _function(r) == "quick"]
+    assert quick, "오탐을 유도할 quick 요청이 수집되지 않았다"
+    assert all(r["timestamp_ns"] > blocked["gap_start_ns"] for r in quick)
 
 
 async def test_heartbeat_ignores_normal_work(app):
