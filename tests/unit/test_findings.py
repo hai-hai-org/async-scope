@@ -1,0 +1,198 @@
+"""Analyzer finding 파생.
+
+finding은 이벤트가 아니라 query 시점 파생이라 별도 fixture 파일을 두지 않는다. 소비자
+계약은 여기 적힌 기대 payload 자체다 — 파일로 복제하면 코드와 어긋나기만 한다.
+"""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from asyncscope.analysis import QueryError
+from asyncscope.analysis.findings import build_findings, get_finding, query_findings
+
+FIXTURE_DIR = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
+
+
+def _events(*names):
+    events = []
+    for name in names:
+        events.extend(json.loads((FIXTURE_DIR / f"{name}.json").read_text())["events"])
+    return events
+
+
+def test_loop_delay_becomes_one_finding_with_a_candidate_not_a_culprit():
+    findings = build_findings(_events("blocking"))
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding == {
+        "finding_id": "blocking-2311000000",
+        "type": "blocking",
+        "severity": "medium",
+        "title": "event loop가 300ms 동안 응답하지 않았다",
+        "evidence": "inferred",
+        "confidence": 0.6,
+        "detected_at_ns": 2311000000,
+        "duration_ns": 300000000,
+        "threshold_ns": 50000000,
+        "suspect": {
+            "source": {"file": "examples/demo.py", "function": "blocking", "line": 49},
+            "label": "blocking()",
+            "span_id": "span-blocking-handler",
+            "request_id": "req-blocking",
+            "certainty": "candidate",
+        },
+        "affected_requests": [
+            {
+                "request_id": "req-blocking",
+                "method": "GET",
+                "path": "/demo/blocking",
+                "started_at_ns": 2000000000,
+                "ended_at_ns": 2313000000,
+            }
+        ],
+        # Day 10 범위. 확인되지 않은 해결책을 미리 단정하지 않는다.
+        "recommendation": None,
+    }
+
+
+def test_affected_requests_excludes_requests_that_started_after_the_gap():
+    """지연이 끝난 뒤에 들어온 req-quick은 그 지연의 피해자가 아니다."""
+    finding = build_findings(_events("blocking"))[0]
+
+    assert [ref["request_id"] for ref in finding["affected_requests"]] == ["req-blocking"]
+
+
+@pytest.mark.parametrize(
+    ("delay_ns", "severity"),
+    [(60_000_000, "low"), (200_000_000, "medium"), (900_000_000, "high")],
+)
+def test_blocking_severity_scales_with_the_threshold(delay_ns, severity):
+    events = [
+        {
+            "type": "loop.blocked",
+            "timestamp_ns": 1_000_000_000 + delay_ns,
+            "request_id": None,
+            "duration_ns": delay_ns,
+            "delay_ns": delay_ns,
+            "threshold_ns": 50_000_000,
+            "evidence": "inferred",
+            "confidence": 0.6,
+        }
+    ]
+
+    assert build_findings(events)[0]["severity"] == severity
+
+
+def test_unexplained_duration_becomes_an_inferred_finding():
+    """수집이 설명하지 못한 시간을 침묵으로 넘기지 않는다."""
+    events = [
+        {
+            "type": "request.start",
+            "timestamp_ns": 0,
+            "request_id": "req-dark",
+            "method": "GET",
+            "path": "/dark",
+        },
+        {
+            "type": "request.end",
+            "timestamp_ns": 120_000_000,
+            "request_id": "req-dark",
+            "duration_ns": 120_000_000,
+            "status": "completed",
+            "status_code": 200,
+        },
+    ]
+
+    finding = build_findings(events)[0]
+    assert finding["finding_id"] == "unattributed-req-dark"
+    assert finding["type"] == "unattributed"
+    assert finding["severity"] == "high"
+    assert finding["evidence"] == "inferred"
+    assert finding["duration_ns"] == 120_000_000
+    assert finding["suspect"] is None
+    assert [ref["request_id"] for ref in finding["affected_requests"]] == ["req-dark"]
+
+
+def test_short_requests_do_not_flood_the_analyzer():
+    """짧은 request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진다."""
+    events = [
+        {
+            "type": "request.start",
+            "timestamp_ns": 0,
+            "request_id": "req-tiny",
+            "method": "GET",
+            "path": "/tiny",
+        },
+        {
+            "type": "request.end",
+            "timestamp_ns": 2_000_000,
+            "request_id": "req-tiny",
+            "duration_ns": 2_000_000,
+            "status": "completed",
+            "status_code": 200,
+        },
+    ]
+
+    assert build_findings(events) == []
+
+
+def test_query_findings_filters_by_type_severity_evidence_and_request():
+    events = _events("blocking") + [
+        {
+            "type": "request.start",
+            "timestamp_ns": 5_000_000_000,
+            "request_id": "req-dark",
+            "method": "GET",
+            "path": "/dark",
+        },
+        {
+            "type": "request.end",
+            "timestamp_ns": 5_120_000_000,
+            "request_id": "req-dark",
+            "duration_ns": 120_000_000,
+            "status": "completed",
+            "status_code": 200,
+        },
+    ]
+
+    everything = query_findings(events)
+    assert everything["total"] == 2
+    # 심각한 것이 먼저 온다.
+    assert [item["severity"] for item in everything["items"]] == ["high", "medium"]
+
+    assert query_findings(events, finding_type="blocking")["total"] == 1
+    assert query_findings(events, severity="high")["total"] == 1
+    assert query_findings(events, evidence="inferred")["total"] == 2
+    assert query_findings(events, severity="low,medium")["total"] == 1
+
+    affected = query_findings(events, request_id="req-blocking")
+    assert [item["finding_id"] for item in affected["items"]] == ["blocking-2311000000"]
+    assert query_findings(events, request_id="req-quick")["total"] == 0
+
+    paged = query_findings(events, page=2, page_size=1)
+    assert paged["has_next"] is False
+    assert [item["severity"] for item in paged["items"]] == ["medium"]
+
+
+def test_get_finding_deep_link_and_missing_id():
+    events = _events("blocking")
+
+    assert get_finding(events, "blocking-2311000000")["type"] == "blocking"
+    assert get_finding(events, "blocking-1") is None
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"finding_type": "guess"}, "unsupported type"),
+        ({"severity": "catastrophic"}, "unsupported severity"),
+        ({"page": 0}, "page must be >= 1"),
+        ({"page_size": 201}, "page_size must be <="),
+    ],
+)
+def test_query_findings_rejects_invalid_parameters(kwargs, message):
+    with pytest.raises(QueryError, match=message):
+        query_findings(_events("blocking"), **kwargs)

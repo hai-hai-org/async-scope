@@ -63,8 +63,10 @@ consume fixtures without depending on collector internals.
 | Background Task lane | `task.start`, `task.end`, `task.cancel` |
 | Blocking marker | `loop.blocked` |
 | Request inspector metadata | request lifecycle fields and request duration |
-| Execution Flow | `span_id`, `parent_span_id`, source, and coroutine start/end duration |
-| Source viewer | `source.file`, `source.function`, `source.line` |
+| Execution Flow | request detail의 `spans` tree |
+| TimeDistribution | request detail의 `time_distribution` |
+| Source viewer | `GET /__asyncscope__/api/source` |
+| Analyzer finding | `GET /__asyncscope__/api/findings` |
 | Evidence legend | `evidence`, `confidence`, `category`, `label` |
 
 ## Requests query API
@@ -85,6 +87,98 @@ request summary는 `request_id`, `method`, `path`, `status`, `status_code`,
 `span_count`, `task_count`, `libraries`, `has_blocking`, `has_unknown_await`를 가진다.
 `request.end`가 아직 없으면 `status: "running"`으로 반환한다.
 
+`has_blocking`은 request 자신의 blocking 이벤트뿐 아니라 request window와 겹치는
+`loop.blocked` 구간으로도 참이 된다. `loop.blocked`는 `request_id`가 없으므로 겹침이
+유일한 연결 수단이다.
+
+### Request detail
+
+detail은 summary와 event 목록에 더해 `time_distribution`과 `spans`를 준다.
+
+```json
+{
+  "request": { "...summary..." },
+  "time_distribution": {
+    "duration_ns": 57000000,
+    "measured_ns": 57000000,
+    "complete": true,
+    "buckets": {
+      "running": 4000000,
+      "waiting": 51000000,
+      "blocking": 0,
+      "response": 500000,
+      "unattributed": 1500000
+    }
+  },
+  "spans": ["...span node..."],
+  "events": []
+}
+```
+
+- `measured_ns`는 `request.start`부터 `request.end`까지의 벽시계 구간이고 bucket 합은
+  항상 이 값과 같다. `duration_ns`는 middleware가 잰 값이라 별도로 준다.
+- 구간이 겹치면 `blocking` > `response` > `waiting` > `running` 순으로 이긴다. `waiting`이
+  `running`보다 높은 이유는 `await`가 자식부터 부모까지 순서대로 suspend되기 때문이다.
+- 어떤 구간에도 덮이지 않은 시간은 `unattributed`로 남긴다. 합을 100%로 맞추려고
+  다른 bucket에 얹지 않는다.
+- `complete: false`면 아직 끝나지 않은 request이고 `duration_ns`는 `null`이다.
+
+span node는 `span_id`, `parent_span_id`, `task_id`, `label`, `source`, `started_at_ns`,
+`ended_at_ns`, `duration_ns`, `wait_ns`, `libraries`, `evidence`, `confidence`,
+`truncated`, `children`을 가진다. `truncated`는 `coroutine.start`를 보지 못한 span이다
+(예외로 끝났거나 ring buffer에서 앞부분이 밀렸다). parent가 stream에 없는 span은 root로
+올라온다.
+
+## Findings query API
+
+Analyzer 화면이 소비한다. finding은 이벤트가 아니다. buffer에 이미 판정 재료가 다 있으므로
+조회 시점에 파생한다 — 판정이 hot path에 들어가지 않고, ring buffer에서 밀려나지 않고,
+threshold를 바꾸면 과거 데이터에도 소급 적용된다. `finding.created` 이벤트는 내보내지 않는다.
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/findings` | finding list |
+| `GET /__asyncscope__/api/findings/{finding_id}` | finding 하나 |
+
+filter는 `type`, `severity`, `evidence`, `request_id`이고 모두 정확히 일치하는 집합이다
+(`?severity=low,medium` 또는 `?severity=low&severity=medium`). `request_id`가 affected
+request query다. `page`, `page_size` 규칙은 Requests와 같다. 정렬은 severity 내림차순,
+같으면 최근 것부터다.
+
+finding은 `finding_id`, `type`, `severity`, `title`, `evidence`, `confidence`,
+`detected_at_ns`, `duration_ns`, `threshold_ns`, `suspect`, `affected_requests`,
+`recommendation`을 가진다.
+
+| `type` | 파생 소스 | `finding_id` | severity |
+| --- | --- | --- | --- |
+| `blocking` | `loop.blocked` 하나 | `blocking-<timestamp_ns>` | 지연이 threshold의 10배 이상 high, 3배 이상 medium |
+| `unattributed` | 설명되지 않은 request 구간 | `unattributed-<request_id>` | 비중 50% 이상 high, 30% 이상 medium |
+
+`unattributed`는 설명 못 한 시간이 10ms 이상이고 비중이 20% 이상일 때만 올린다. 짧은
+request의 측정 오차가 매번 finding이 되면 목록이 쓸모없어진다.
+
+`suspect`는 침묵 구간 **시작 직전**에 마지막으로 실행된 프로젝트 프레임이며 항상
+`certainty: "candidate"`다. heartbeat가 깨어난 시점의 마지막 coroutine을 쓰면 지연이 끝난
+뒤 처리된 다른 request를 지목하게 된다. `recommendation`은 Day 10까지 항상 `null`이다.
+
+## Source snippet API
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /__asyncscope__/api/source?file=&line=&radius=` | project root 안 `.py` 파일의 읽기 전용 snippet |
+
+`radius`는 기본 5, 최대 50이고 `line` 위아래로 그만큼 준다. 응답은 `file`(project 상대
+경로), `start_line`, `lines`다.
+
+| 상황 | 응답 |
+| --- | --- |
+| project root 밖, symlink 탈출, 절대 경로, 비-`.py` | `403 forbidden` |
+| root 안이지만 없는 파일 | `404 not_found` |
+| `file` 누락, `line < 1`, 정수가 아닌 값, `radius > 50` | `400 bad_request` |
+
+없는 파일과 거부된 경로를 구분해 알려 주지 않는다. 구분 자체가 root 안 디렉터리 구조를
+흘린다. 절대 경로는 응답에 넣지 않는다.
+
 ## Accuracy boundary
 
 - `observed` means the event came from `sys.monitoring`, ASGI lifecycle, or an
@@ -95,7 +189,9 @@ request summary는 `request_id`, `method`, `path`, `status`, `status_code`,
   They must not be labeled DB, HTTP, Redis, or WebSocket without adapter
   evidence.
 - `loop.blocked` in M0 is an unattributed delay. The collector must not attach
-  a `suspect` or otherwise name a culprit from heartbeat timing alone.
+  a `suspect` or otherwise name a culprit from heartbeat timing alone. 전체 stream을
+  가진 분석 단계는 침묵 구간 직전 프레임을 후보로 제시할 수 있지만
+  `certainty: "candidate"`를 붙여 확정이 아님을 드러낸다.
 - Background task, adapter, cancel, and disconnect fixtures include expected
   normalized fields that M1 collectors and query APIs must produce. They are
   consumer contracts, not proof that the current M0 collector already emits
@@ -134,6 +230,7 @@ fixture는 M1 목표 shape이고, 아직 채우지 못한 필드는 `null` 또�
 | `coroutine.suspend`의 `label`, `library` | 지원 adapter는 `"await asyncpg fetch"` 형태 label과 `library`, 나머지는 `"unknown await"` / `null` | 완료 |
 | 예외로 끝난 coroutine | `coroutine.end`가 나오지 않는다 (`PY_UNWIND`는 span 스택 회수에만 쓴다) | 별도 결정 필요 |
 | `request.end`의 `status: "disconnected"` | 실제로 나오지 않는다 (아래 참고) | 별도 결정 필요 |
+| request별 blocking 시간 | request window와 `loop.blocked` 구간의 겹침으로 계산한다 | 완료 |
 
 ### 지원 adapter
 
