@@ -34,8 +34,11 @@ def blocked_gap(event: dict[str, Any]) -> tuple[int, int] | None:
     # collector는 gap_start_ns를 붙이지만 계약 fixture에는 없다. 없으면 되돌려 계산한다.
     start = event.get("gap_start_ns")
     if start is None or start >= end:
-        start = end - delay
-    return start, end
+        return end - delay, end
+    # 구간 길이는 delay_ns와 정확히 같아야 한다. gap_start_ns는 emit()이 timestamp_ns를
+    # 찍기 직전에 읽은 값이라, timestamp_ns까지를 구간 끝으로 쓰면 emit 자신의 몇 µs가
+    # loop 지연에 섞인다.
+    return start, start + delay
 
 
 def blocked_intervals(events: Iterable[dict[str, Any]]) -> list[tuple[int, int]]:

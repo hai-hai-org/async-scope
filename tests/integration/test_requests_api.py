@@ -232,7 +232,8 @@ async def test_summary_api_reports_live_metrics_without_tracing_itself(demo_app)
     assert after == before, "내부 API 호출이 대상 앱 tracing event가 되면 안 된다"
 
     summary = response.json()
-    assert summary["tracing"] is True
+    assert summary["status"] == "running"
+    assert summary["status_reason"] is None
     assert summary["request_rate_per_second"] > 0
     assert summary["blocking_count"] >= 1
     assert summary["loop_delay"]["samples"] >= 1
@@ -244,13 +245,86 @@ async def test_summary_api_reports_live_metrics_without_tracing_itself(demo_app)
     assert invalid.json()["error"] == "bad_request"
 
 
-async def test_summary_api_says_tracing_is_off_before_install(demo_app):
+async def test_summary_api_says_status_is_off_before_install(demo_app):
     """빈 값이 idle 때문인지 tracing이 꺼져서인지 UI가 구분할 수 있어야 한다."""
     scope = AsyncScope(demo_app, project_root=ROOT)  # install()하지 않는다
     transport = httpx.ASGITransport(app=scope)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
         summary = (await client.get("/__asyncscope__/api/summary")).json()
 
-    assert summary["tracing"] is False
+    assert summary["status"] == "off"
     assert summary["request_rate_per_second"] is None
     assert summary["buffer"]["events"] == 0
+
+
+async def test_summary_rate_matches_the_requests_actually_sent(demo_app):
+    """rate는 measured window로 나눈 값이다. 되돌려 곱하면 보낸 수가 나와야 한다."""
+    sent = 6
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            for _ in range(sent):
+                await client.get("/demo/quick")
+            summary = (await client.get("/__asyncscope__/api/summary")).json()
+    finally:
+        scope.uninstall()
+
+    measured_s = summary["measured_window_ns"] / 1e9
+    assert round(summary["request_rate_per_second"] * measured_s) == sent
+    assert summary["active_requests"] == 0
+
+
+async def test_summary_loop_delay_matches_the_recorded_event(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            # heartbeat가 첫 주기에 들어가기 전에 막으면 잴 지연 자체가 없다.
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+            summary = (await client.get("/__asyncscope__/api/summary")).json()
+        blocked = [event for event in scope.events if event["type"] == "loop.blocked"]
+    finally:
+        scope.uninstall()
+
+    assert summary["loop_delay"]["samples"] == len(blocked)
+    assert summary["loop_delay"]["max_ns"] == max(event["delay_ns"] for event in blocked)
+    assert summary["blocking_count"] == len(blocked)
+
+
+async def test_summary_counts_a_request_that_is_still_running(demo_app):
+    """active_requests는 window로 자르지 않는다. 도는 동안 세어져야 한다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            slow = asyncio.create_task(client.get("/demo/long-running"))
+            await asyncio.sleep(0.1)  # /demo/long-running은 1초를 쓴다
+            during = (await client.get("/__asyncscope__/api/summary")).json()
+            await slow
+            after = (await client.get("/__asyncscope__/api/summary")).json()
+    finally:
+        scope.uninstall()
+
+    assert during["active_requests"] >= 1
+    assert after["active_requests"] == 0
+
+
+async def test_summary_is_recomputed_on_every_poll(demo_app):
+    """갱신 주기는 UI가 정한다. 서버는 부를 때마다 다시 계산하고 캐시하지 않는다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/quick")
+            first = (await client.get("/__asyncscope__/api/summary")).json()
+            await client.get("/demo/quick")
+            second = (await client.get("/__asyncscope__/api/summary")).json()
+    finally:
+        scope.uninstall()
+
+    assert second["server_time"] > first["server_time"]
+    assert second["buffer"]["events"] > first["buffer"]["events"]
+    assert second["buffer"]["last_sequence"] > first["buffer"]["last_sequence"]

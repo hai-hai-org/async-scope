@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 from asyncscope import AsyncScope
+from asyncscope import scope as scope_module
 from asyncscope.collector import loop as loop_collector
 from asyncscope.collector.monitoring import request_id, tracing
 from asyncscope.scope import SINK_NAME, unsupported_reason
@@ -256,3 +257,36 @@ async def _disconnect_receive():
 
 async def _drop_send(message):
     raise AssertionError(f"응답을 보내면 안 되는 경로다: {message}")
+
+
+def test_status_reports_what_the_server_actually_knows(demo_app):
+    """DESIGN.md AppShell States 넷 중 서버가 아는 둘. paused/disconnected는 client 몫이다."""
+    scope = AsyncScope(demo_app, project_root=ROOT)
+
+    assert scope.status == "off"
+    assert scope.status_reason is None
+
+    scope.install()
+    try:
+        assert scope.status == "running"
+        assert scope.status_reason is None
+    finally:
+        scope.uninstall()
+
+    assert scope.status == "off"
+
+
+def test_unsupported_runtime_wins_over_install_state(demo_app, monkeypatch):
+    """미지원 런타임이면 install 여부와 무관하게 unsupported다.
+
+    install()이 예외를 던지므로 "돌고 있으면 지원 런타임"이라고 생각하기 쉽지만,
+    install 없이 ASGI app으로만 쓰면 내부 API는 그대로 응답한다. 그때 원인을 말해야 한다.
+    """
+    monkeypatch.setattr(scope_module.sys, "version_info", (3, 11, 9))
+    scope = AsyncScope(demo_app, project_root=ROOT)
+
+    assert scope.status == "unsupported"
+    assert "3.12" in scope.status_reason
+
+    with pytest.raises(RuntimeError, match="3.12"):
+        scope.install()
