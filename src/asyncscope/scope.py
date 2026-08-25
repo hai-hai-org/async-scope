@@ -119,7 +119,7 @@ class AsyncScope:
         self._heartbeat = loop_collector.start(self.threshold, self.interval)
 
     async def __call__(self, scope, receive, send):
-        if await handle_api(self.buffer, self.project_root, scope, send):
+        if await handle_api(self.buffer, self.project_root, scope, receive, send):
             return None
         if self._tracker is None:
             return await self.app(scope, receive, send)
