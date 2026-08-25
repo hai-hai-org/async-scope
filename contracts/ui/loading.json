@@ -1,0 +1,31 @@
+{
+  "schema_version": "m1.ui-state.v1",
+  "state": "loading",
+  "summary": {
+    "state": "loading",
+    "data": null,
+    "error": null
+  },
+  "requests": {
+    "state": "loading",
+    "data": null,
+    "selected": null,
+    "error": null
+  },
+  "findings": {
+    "state": "loading",
+    "data": null,
+    "selected": null,
+    "error": null
+  },
+  "settings": {
+    "state": "loading",
+    "data": null,
+    "error": null
+  },
+  "events": {
+    "state": "loading",
+    "data": null,
+    "error": null
+  }
+}

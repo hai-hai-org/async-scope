@@ -1,0 +1,59 @@
+"""JSON export/replay payloads for the internal API."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from .analysis import QueryError
+
+SCHEMA_VERSION = "m0.normalized.v1"
+
+
+def export_payload(buffer, *, exported_at: str | None = None) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "exported_at": exported_at or datetime.now(UTC).isoformat(),
+        "buffer": buffer_metadata(buffer),
+        "events": buffer.snapshot(),
+    }
+
+
+def replay_into(buffer, payload: dict[str, Any]) -> dict[str, Any]:
+    events = validate_replay_payload(payload)
+    buffer.replace(events)
+    return export_payload(buffer)
+
+
+def validate_replay_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        raise QueryError("replay payload must be an object")
+    if payload.get("schema_version") != SCHEMA_VERSION:
+        raise QueryError(f"schema_version must be {SCHEMA_VERSION}")
+
+    events = payload.get("events")
+    if not isinstance(events, list):
+        raise QueryError("events must be a list")
+
+    cleaned = []
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise QueryError(f"events[{index}] must be an object")
+        cleaned.append(_strip_transport_metadata(event))
+    return cleaned
+
+
+def buffer_metadata(buffer) -> dict[str, int | None]:
+    return {
+        "events": len(buffer),
+        "max_events": buffer.max_events,
+        "dropped_count": buffer.dropped_count,
+        "first_sequence": buffer.first_sequence,
+        "last_sequence": buffer.last_sequence,
+    }
+
+
+def _strip_transport_metadata(event: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(event)
+    cleaned.pop("sequence", None)
+    return cleaned

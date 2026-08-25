@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
+from collections.abc import Iterable
 
 
 class EventBuffer:
@@ -62,6 +63,18 @@ class EventBuffer:
 
     def clear(self) -> None:
         self._events.clear()
+
+    def replace(self, events: Iterable[dict]) -> None:
+        """Replay/import용 교체.
+
+        기존 live stream metadata까지 새 입력 기준으로 다시 시작한다. 외부 입력의
+        `sequence`는 append()가 storage-owned 값으로 다시 붙인다.
+        """
+        self._events.clear()
+        self._next_sequence = 1
+        self.dropped_count = 0
+        for event in events:
+            self.append(event)
 
     def __len__(self) -> int:
         return len(self._events)

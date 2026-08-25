@@ -77,6 +77,19 @@ def test_event_buffer_clear_keeps_sequence_monotonic():
     assert buffer.last_sequence == 2
 
 
+def test_event_buffer_replace_resets_transport_metadata():
+    buffer = EventBuffer(max_events=2)
+
+    buffer.append(_event("old"))
+    buffer.replace([_event("one"), _event("two"), _event("three")])
+
+    assert [event["type"] for event in buffer.snapshot()] == ["two", "three"]
+    assert [event["sequence"] for event in buffer.snapshot()] == [2, 3]
+    assert buffer.first_sequence == 2
+    assert buffer.last_sequence == 3
+    assert buffer.dropped_count == 1
+
+
 def test_event_buffer_snapshot_does_not_expose_internal_event_dicts():
     buffer = EventBuffer(max_events=1)
     buffer.append(_event("one"))

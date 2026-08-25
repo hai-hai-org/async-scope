@@ -1,0 +1,100 @@
+{
+  "schema_version": "m1.ui-state.v1",
+  "state": "empty",
+  "summary": {
+    "state": "empty",
+    "data": {
+      "server_time": "2026-08-25T00:00:00+00:00",
+      "tracing": true,
+      "window_ns": 60000000000,
+      "measured_window_ns": 0,
+      "request_rate_per_second": null,
+      "active_requests": 0,
+      "loop_delay": {
+        "average_ns": null,
+        "max_ns": null,
+        "samples": 0,
+        "threshold_ns": null
+      },
+      "blocking_count": 0,
+      "buffer": {
+        "events": 0,
+        "max_events": 1000,
+        "dropped_count": 0,
+        "first_sequence": null,
+        "last_sequence": null
+      }
+    },
+    "error": null
+  },
+  "requests": {
+    "state": "empty",
+    "data": {
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "page_size": 50,
+      "has_next": false
+    },
+    "selected": null,
+    "error": null
+  },
+  "findings": {
+    "state": "empty",
+    "data": {
+      "items": [],
+      "total": 0,
+      "page": 1,
+      "page_size": 50,
+      "has_next": false
+    },
+    "selected": null,
+    "error": null
+  },
+  "settings": {
+    "state": "ready",
+    "data": {
+      "tracing": true,
+      "persisted": false,
+      "settings": {
+        "threshold_s": 0.05,
+        "interval_s": 0.01,
+        "buffer_size": 1000,
+        "project_root": "/workspace/project"
+      },
+      "pending_restart": {},
+      "limits": {
+        "threshold_s": {
+          "min": 0.001,
+          "max": 10.0
+        },
+        "interval_s": {
+          "min": 0.001,
+          "max": 10.0
+        },
+        "buffer_size": {
+          "min": 1,
+          "max": 100000
+        },
+        "project_root": {
+          "must_exist": true,
+          "must_be_directory": true
+        }
+      },
+      "feedback": {
+        "acknowledged": 0,
+        "false_positive": 0
+      }
+    },
+    "error": null
+  },
+  "events": {
+    "state": "empty",
+    "data": {
+      "items": [],
+      "cursor": null,
+      "gap": null
+    },
+    "error": null
+  }
+}
