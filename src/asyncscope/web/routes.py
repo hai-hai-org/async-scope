@@ -15,6 +15,7 @@ from ..analysis import QueryError
 from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
+from ..config import apply_settings_patch, settings_payload
 from ..source import read_snippet
 from .sse import handle_sse
 
@@ -24,6 +25,7 @@ FINDINGS_PATH = f"{API_PREFIX}/findings"
 SOURCE_PATH = f"{API_PREFIX}/source"
 EVENTS_PATH = f"{API_PREFIX}/events"
 SUMMARY_PATH = f"{API_PREFIX}/summary"
+SETTINGS_PATH = f"{API_PREFIX}/settings"
 
 # snippet은 화면에 붙는 문맥이지 파일 뷰어가 아니다.
 MAX_RADIUS = 50
@@ -43,7 +45,12 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     if not path.startswith(API_PREFIX):
         return False
 
-    if scope.get("method") != "GET":
+    method = scope.get("method")
+    if path == SETTINGS_PATH:
+        await _handle_settings(app_scope, method, receive, send)
+        return True
+
+    if method != "GET":
         await _json_response(send, 405, {"error": "method_not_allowed"})
         return True
 
@@ -171,6 +178,22 @@ async def _handle_events(buffer, params: dict[str, list[str]], scope, receive, s
         await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
 
 
+async def _handle_settings(app_scope, method: str, receive, send) -> None:
+    if method == "GET":
+        await _json_response(send, 200, settings_payload(app_scope))
+        return
+    if method == "PATCH":
+        try:
+            body = await _json_body(receive)
+            payload = apply_settings_patch(app_scope, body)
+        except QueryError as exc:
+            await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
+            return
+        await _json_response(send, 200, payload)
+        return
+    await _json_response(send, 405, {"error": "method_not_allowed"})
+
+
 async def _guarded(send, query) -> None:
     try:
         payload = query()
@@ -204,6 +227,28 @@ def _one(params: dict[str, list[str]], name: str, default: str | None = None) ->
     if not values:
         return default
     return values[-1]
+
+
+async def _json_body(receive) -> dict:
+    chunks = []
+    more_body = True
+    while more_body:
+        message = await receive()
+        if message.get("type") == "http.disconnect":
+            raise QueryError("request body disconnected")
+        chunks.append(message.get("body", b""))
+        more_body = message.get("more_body", False)
+
+    raw = b"".join(chunks).strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise QueryError("request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise QueryError("request body must be a JSON object")
+    return payload
 
 
 async def _json_response(send, status: int, payload: dict) -> None:
