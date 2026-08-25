@@ -1,3 +1,13 @@
+import adapterFixture from "../../../contracts/fixtures/adapter-awaits.json";
+import blockingFixture from "../../../contracts/fixtures/blocking.json";
+import timelineFixture from "../../../contracts/fixtures/timeline.json";
+import unknownAwaitFixture from "../../../contracts/fixtures/unknown-await.json";
+import type {
+  ExportPayload,
+  NormalizedEvent,
+  SummaryPayload,
+} from "../shared/api/schemas";
+
 export type UiSection<T> = {
   state: "loading" | "empty" | "ready" | "error";
   data: T | null;
@@ -126,3 +136,52 @@ export const requestRows = [
     evidence: "observed",
   },
 ];
+
+export const eventFixtures = {
+  timeline: timelineFixture.events as unknown as NormalizedEvent[],
+  blocking: blockingFixture.events as unknown as NormalizedEvent[],
+  unknownAwait: unknownAwaitFixture.events as unknown as NormalizedEvent[],
+  adapterAwaits: adapterFixture.events as unknown as NormalizedEvent[],
+};
+
+export const fallbackExport: ExportPayload = {
+  schema_version: "m0.normalized.v1",
+  exported_at: "2026-08-25T00:00:00+00:00",
+  buffer: {
+    events: eventFixtures.timeline.length,
+    max_events: 1000,
+    dropped_count: 0,
+    first_sequence: 1,
+    last_sequence: eventFixtures.timeline.length,
+    source: "replay",
+  },
+  events: eventFixtures.timeline.map((event, index) => ({
+    ...event,
+    sequence: index + 1,
+  })),
+};
+
+export const fallbackSummary: SummaryPayload = {
+  server_time: "2026-08-25T00:00:00+00:00",
+  status: "running",
+  status_reason: null,
+  window_ns: 60_000_000_000,
+  measured_window_ns: 57_000_000,
+  request_rate_per_second: 35.088,
+  active_requests: 0,
+  loop_delay: {
+    average_ns: null,
+    max_ns: null,
+    samples: 0,
+    threshold_ns: null,
+  },
+  blocking_count: 0,
+  buffer: {
+    events: fallbackExport.events.length,
+    max_events: 1000,
+    dropped_count: 0,
+    first_sequence: 1,
+    last_sequence: fallbackExport.events.length,
+    source: "replay",
+  },
+};
