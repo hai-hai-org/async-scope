@@ -56,12 +56,17 @@ class EventBuffer:
         return [dict(event) for event in self._events if event["sequence"] > cursor]
 
     def cursor_was_dropped(self, cursor: int | None) -> bool:
-        first_sequence = self.first_sequence
-        return (
-            cursor is not None
-            and first_sequence is not None
-            and cursor < first_sequence - 1
-        )
+        """client cursor로 이어서 받을 수 없는 상태인가. SSE가 gap frame을 낼 조건이다."""
+        if cursor is None:
+            return False
+        first, last = self.first_sequence, self.last_sequence
+        if last is None:
+            # buffer가 비었는데 cursor가 있다. clear() 직후나 재시작 후의 옛 cursor다.
+            return cursor > 0
+        # cursor > last는 건강한 live stream에서 일어날 수 없다. cursor는 우리가 보낸
+        # id에서 오고 sequence는 단조 증가한다. 부등식이 깨졌으면 replace()가 buffer를
+        # 교체하며 sequence를 되돌린 것이다.
+        return cursor > last or cursor < first - 1
 
     def clear(self) -> None:
         self._events.clear()

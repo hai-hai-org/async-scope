@@ -174,3 +174,46 @@ def test_clear_forgets_the_replay_trace():
     buffer.clear()
     assert buffer.replayed_through is None
     assert buffer.source == "live"
+
+
+def test_cursor_from_a_replaced_buffer_is_reported_as_dropped():
+    """replace()가 sequence를 1로 되돌린다. 이전 cursor로는 이어받을 수 없다.
+
+    이 판정이 없으면 SSE가 gap frame도 내지 않고 client는 끊긴 줄도 모른 채 조용히
+    아무것도 받지 못한다.
+    """
+    buffer = EventBuffer(max_events=10)
+    for _ in range(6):
+        buffer.append(_event("live"))
+    stale_cursor = buffer.last_sequence
+    assert not buffer.cursor_was_dropped(stale_cursor)
+
+    buffer.replace([_event("replayed"), _event("replayed")])
+
+    assert buffer.last_sequence < stale_cursor
+    assert buffer.cursor_was_dropped(stale_cursor)
+    # 새 stream 안의 cursor는 정상이다.
+    assert not buffer.cursor_was_dropped(buffer.last_sequence)
+    assert not buffer.cursor_was_dropped(None)
+
+
+def test_cursor_is_dropped_when_the_buffer_was_cleared():
+    buffer = EventBuffer(max_events=10)
+    buffer.append(_event("one"))
+    buffer.append(_event("two"))
+
+    buffer.clear()
+
+    assert buffer.cursor_was_dropped(2)
+    assert not buffer.cursor_was_dropped(0)
+    assert not buffer.cursor_was_dropped(None)
+
+
+def test_every_valid_cursor_in_a_healthy_stream_is_not_dropped():
+    """오탐이 나면 client가 멀쩡한 연결을 계속 끊고 다시 붙는다."""
+    buffer = EventBuffer(max_events=10)
+    for _ in range(10):
+        buffer.append(_event("live"))
+
+    for cursor in range(buffer.first_sequence - 1, buffer.last_sequence + 1):
+        assert not buffer.cursor_was_dropped(cursor), cursor
