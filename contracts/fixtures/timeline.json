@@ -304,5 +304,67 @@
       "status_code": 200,
       "status": "completed"
     }
-  ]
+  ],
+  "expected": {
+    "req-1": {
+      "duration_ns": 57000000,
+      "measured_ns": 57000000,
+      "buckets": {
+        "running": 4000000,
+        "waiting": 51000000,
+        "blocking": 0,
+        "response": 500000,
+        "unattributed": 1500000
+      },
+      "spans": [
+        {
+          "span_id": "span-req-1-handler",
+          "parent_span_id": null,
+          "offset_ns": 1000000,
+          "duration_ns": 55000000,
+          "wait_ns": 0,
+          "children": [
+            {
+              "span_id": "span-req-1-step",
+              "parent_span_id": "span-req-1-handler",
+              "offset_ns": 2000000,
+              "duration_ns": 53000000,
+              "wait_ns": 51000000,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "req-2": {
+      "duration_ns": 57000000,
+      "measured_ns": 57000000,
+      "buckets": {
+        "running": 4000000,
+        "waiting": 51000000,
+        "blocking": 0,
+        "response": 500000,
+        "unattributed": 1500000
+      },
+      "spans": [
+        {
+          "span_id": "span-req-2-handler",
+          "parent_span_id": null,
+          "offset_ns": 1000000,
+          "duration_ns": 55000000,
+          "wait_ns": 0,
+          "children": [
+            {
+              "span_id": "span-req-2-step",
+              "parent_span_id": "span-req-2-handler",
+              "offset_ns": 2000000,
+              "duration_ns": 53000000,
+              "wait_ns": 51000000,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  }
 }
