@@ -180,6 +180,29 @@ async def test_heartbeat_is_not_attributed_to_the_current_request():
     assert all(row["request_id"] is None for row in blocked), blocked
 
 
+async def test_normal_workload_is_not_reported_as_blocking():
+    """짧은 정상 callback이 blocking으로 잡히면 Analyzer 전체가 거짓말이 된다.
+
+    양성(time.sleep)은 위 테스트가 덮는다. 여기는 음성 쪽 경계다.
+
+    ponytail: 벽시계 기준이라 심하게 부하가 걸린 머신에서는 흔들릴 수 있다.
+    흔들리면 threshold를 올리기 전에 왜 50ms가 밀렸는지부터 본다.
+    """
+
+    async def short_callback():
+        for _ in range(100):
+            await asyncio.sleep(0.001)
+            sum(range(2000))  # 실제 handler의 짧은 CPU 구간
+
+    with tracing(ROOT) as rows:
+        heartbeat = loop_collector.start()  # 기본 threshold 50ms, interval 10ms
+        await asyncio.gather(*(short_callback() for _ in range(20)))
+        heartbeat.cancel()
+
+    blocked = [row for row in rows if row["type"] == "loop.blocked"]
+    assert not blocked, blocked
+
+
 def test_unsupported_reason():
     assert unsupported_reason((3, 13, 0), "cpython") is None
     assert "3.12" in unsupported_reason((3, 11, 9), "cpython")
