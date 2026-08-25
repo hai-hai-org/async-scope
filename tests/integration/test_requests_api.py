@@ -1,3 +1,5 @@
+import asyncio
+import time
 from pathlib import Path
 
 import httpx
@@ -13,6 +15,16 @@ def demo_app():
     from examples.demo import app
 
     return app
+
+
+async def _wait_for_loop_blocked(scope, timeout: float = 2.0) -> None:
+    """heartbeat는 sampling이라 요청이 끝난 직후에는 아직 지연을 기록하지 않았다."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(event["type"] == "loop.blocked" for event in scope.events):
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("heartbeat가 loop 지연을 기록하지 않았다")
 
 
 async def test_requests_api_reads_the_event_buffer_without_tracing_itself(demo_app):
@@ -96,3 +108,96 @@ async def test_requests_api_supports_query_parameters_and_validation(demo_app):
 
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "bad_request"
+
+
+async def test_request_detail_explains_the_duration_with_spans_and_buckets(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/non-blocking")
+            requests = (await client.get("/__asyncscope__/api/requests")).json()
+            request_id = requests["items"][0]["request_id"]
+            detail = (
+                await client.get(f"/__asyncscope__/api/requests/{request_id}")
+            ).json()
+    finally:
+        scope.uninstall()
+
+    distribution = detail["time_distribution"]
+    assert sum(distribution["buckets"].values()) == distribution["measured_ns"]
+    assert distribution["buckets"]["waiting"] > 0, "asyncio.sleep은 대기 시간이다"
+
+    assert detail["spans"], "Execution Flow가 그릴 span tree가 있어야 한다"
+    assert any(span["children"] for span in detail["spans"]), "부모·자식 관계가 남아야 한다"
+
+
+async def test_findings_api_reports_the_loop_delay_and_its_affected_request(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            # heartbeat가 첫 주기에 들어가기 전에 막으면 잴 지연 자체가 없다.
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+            before = len(scope.events)
+            listed = await client.get("/__asyncscope__/api/findings")
+            after = len(scope.events)
+
+            findings = listed.json()
+            finding_id = findings["items"][0]["finding_id"]
+            detail = await client.get(f"/__asyncscope__/api/findings/{finding_id}")
+            missing = await client.get("/__asyncscope__/api/findings/blocking-0")
+            filtered = await client.get(
+                "/__asyncscope__/api/findings", params={"severity": "nonsense"}
+            )
+    finally:
+        scope.uninstall()
+
+    assert listed.status_code == 200
+    assert after == before, "내부 API 호출이 대상 앱 tracing event가 되면 안 된다"
+
+    blocking = [item for item in findings["items"] if item["type"] == "blocking"]
+    assert blocking, "time.sleep(0.3)은 finding이 되어야 한다"
+    assert blocking[0]["evidence"] == "inferred"
+    assert blocking[0]["recommendation"] is None
+    assert blocking[0]["affected_requests"][0]["path"] == "/demo/blocking"
+
+    assert detail.status_code == 200
+    assert detail.json()["finding_id"] == finding_id
+    assert missing.status_code == 404
+    assert filtered.status_code == 400
+
+
+async def test_source_api_serves_the_project_file_a_finding_points_at(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            # heartbeat가 첫 주기에 들어가기 전에 막으면 잴 지연 자체가 없다.
+            await asyncio.sleep(0.05)
+            await client.get("/demo/blocking")
+            await _wait_for_loop_blocked(scope)
+            findings = (await client.get("/__asyncscope__/api/findings")).json()
+            suspect = next(
+                item["suspect"]
+                for item in findings["items"]
+                if item["type"] == "blocking" and item["suspect"]
+            )
+            snippet = await client.get(
+                "/__asyncscope__/api/source",
+                params={"file": suspect["source"]["file"], "line": suspect["source"]["line"]},
+            )
+            escape = await client.get(
+                "/__asyncscope__/api/source",
+                params={"file": "../../etc/passwd", "line": 1},
+            )
+    finally:
+        scope.uninstall()
+
+    assert suspect["certainty"] == "candidate", "heartbeat sampling은 범인을 단정하지 않는다"
+    assert suspect["source"]["function"] == "blocking"
+    assert snippet.status_code == 200
+    assert snippet.json()["file"] == suspect["source"]["file"]
+    assert escape.status_code == 403

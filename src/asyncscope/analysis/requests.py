@@ -5,9 +5,21 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-DEFAULT_PAGE = 1
-DEFAULT_PAGE_SIZE = 50
-MAX_PAGE_SIZE = 200
+from . import (
+    DEFAULT_PAGE,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    QueryError,
+    filter_values,
+    paginate,
+)
+from .spans import (
+    blocked_intervals,
+    build_span_tree,
+    overlaps_blocking,
+    time_distribution,
+)
+
 DEFAULT_SORT = "started_at_ns"
 DEFAULT_ORDER = "desc"
 
@@ -16,9 +28,18 @@ VALID_ORDERS = {"asc", "desc"}
 
 NUMERIC_SORTS = {"started_at_ns", "duration_ns"}
 
+# 이름을 바꾸면 web/routes.py와 기존 테스트가 깨진다. 같은 예외를 두 이름으로 노출한다.
+RequestQueryError = QueryError
 
-class RequestQueryError(ValueError):
-    """사용자가 고칠 수 있는 query parameter 오류."""
+__all__ = [
+    "DEFAULT_PAGE",
+    "DEFAULT_PAGE_SIZE",
+    "MAX_PAGE_SIZE",
+    "RequestQueryError",
+    "get_request_detail",
+    "group_by_request",
+    "query_requests",
+]
 
 
 def query_requests(
@@ -35,23 +56,20 @@ def query_requests(
 ) -> dict[str, Any]:
     """Event stream을 request summary list로 변환한다."""
 
-    page = _parse_positive_int(page, "page")
-    page_size = _parse_positive_int(page_size, "page_size")
-    if page_size > MAX_PAGE_SIZE:
-        raise RequestQueryError(f"page_size must be <= {MAX_PAGE_SIZE}")
-
     sort = sort or DEFAULT_SORT
     if sort not in VALID_SORTS:
-        raise RequestQueryError(f"unsupported sort: {sort}")
+        raise QueryError(f"unsupported sort: {sort}")
 
     order = (order or DEFAULT_ORDER).lower()
     if order not in VALID_ORDERS:
-        raise RequestQueryError(f"unsupported order: {order}")
+        raise QueryError(f"unsupported order: {order}")
 
+    events = list(events)
+    blocked = blocked_intervals(events)
     rows = [
         (summary, request_events)
-        for request_events in _group_request_events(events).values()
-        if (summary := _summarize_request(request_events)) is not None
+        for request_events in group_by_request(events).values()
+        if (summary := _summarize_request(request_events, blocked)) is not None
     ]
     rows = _filter_rows(
         rows,
@@ -62,39 +80,39 @@ def query_requests(
     )
     rows = _sort_rows(rows, sort=sort, order=order)
 
-    total = len(rows)
-    start = (page - 1) * page_size
-    end = start + page_size
-    return {
-        "items": [summary for summary, _events in rows[start:end]],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "has_next": end < total,
-    }
+    return paginate([summary for summary, _events in rows], page, page_size)
 
 
 def get_request_detail(
     events: Iterable[dict[str, Any]],
     request_id: str,
 ) -> dict[str, Any] | None:
-    """request_id deep link용 상세 데이터를 반환한다."""
+    """request_id deep link용 상세 데이터를 반환한다.
 
-    request_events = _group_request_events(events).get(request_id)
+    Execution Flow와 TimeDistribution이 여기서 나온다. blocking 구간은 request에 귀속되지
+    않는 `loop.blocked`에서 오므로 전체 stream이 필요하다.
+    """
+
+    events = list(events)
+    request_events = group_by_request(events).get(request_id)
     if request_events is None:
         return None
 
-    summary = _summarize_request(request_events)
+    blocked = blocked_intervals(events)
+    summary = _summarize_request(request_events, blocked)
     if summary is None:
         return None
 
     return {
         "request": summary,
+        "time_distribution": time_distribution(request_events, blocked),
+        "spans": build_span_tree(request_events),
         "events": [_copy_event(event) for event in request_events],
     }
 
 
-def _group_request_events(events: Iterable[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def group_by_request(events: Iterable[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """request_id가 없는 이벤트(loop.blocked 등)는 어느 request에도 속하지 않는다."""
     grouped: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         request_id = event.get("request_id")
@@ -104,7 +122,10 @@ def _group_request_events(events: Iterable[dict[str, Any]]) -> dict[str, list[di
     return grouped
 
 
-def _summarize_request(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _summarize_request(
+    events: list[dict[str, Any]],
+    blocked: list[tuple[int, int]] = (),
+) -> dict[str, Any] | None:
     start = _first_of_type(events, "request.start")
     if start is None:
         return None
@@ -125,14 +146,17 @@ def _summarize_request(events: list[dict[str, Any]]) -> dict[str, Any] | None:
     span_ids = {event["span_id"] for event in events if event.get("span_id") is not None}
     task_ids = {event["task_id"] for event in events if event.get("task_id") is not None}
 
+    started_at_ns = start["timestamp_ns"]
+    ended_at_ns = end["timestamp_ns"] if end is not None else None
+
     return {
         "request_id": request_id,
         "method": start.get("method"),
         "path": start.get("path"),
         "status": status,
         "status_code": status_code,
-        "started_at_ns": start["timestamp_ns"],
-        "ended_at_ns": end["timestamp_ns"] if end is not None else None,
+        "started_at_ns": started_at_ns,
+        "ended_at_ns": ended_at_ns,
         "duration_ns": end.get("duration_ns") if end is not None else None,
         "response_started_at_ns": (
             response_start["timestamp_ns"] if response_start is not None else None
@@ -141,7 +165,11 @@ def _summarize_request(events: list[dict[str, Any]]) -> dict[str, Any] | None:
         "span_count": len(span_ids),
         "task_count": len(task_ids),
         "libraries": libraries,
-        "has_blocking": any(_is_blocking(event) for event in events),
+        # request 자신의 blocking 이벤트가 없어도 window가 loop 지연과 겹치면 늦은 것이다.
+        "has_blocking": (
+            any(_is_blocking(event) for event in events)
+            or overlaps_blocking(started_at_ns, ended_at_ns, blocked)
+        ),
         "has_unknown_await": any(_is_unknown_await(event) for event in events),
     }
 
@@ -154,9 +182,9 @@ def _filter_rows(
     method: str | Iterable[str] | None,
     path: str | Iterable[str] | None,
 ) -> list[tuple[dict[str, Any], list[dict[str, Any]]]]:
-    statuses = _filter_values(status)
-    methods = _filter_values(method, uppercase=True)
-    paths = _filter_values(path)
+    statuses = filter_values(status)
+    methods = filter_values(method, uppercase=True)
+    paths = filter_values(path)
 
     filtered = []
     for summary, events in rows:
@@ -211,33 +239,6 @@ def _matches_search(
         for value in values
         if value is not None
     )
-
-
-def _filter_values(
-    value: str | Iterable[str] | None,
-    *,
-    uppercase: bool = False,
-) -> set[str] | None:
-    if value is None:
-        return None
-    values = [value] if isinstance(value, str) else list(value)
-    normalized = {
-        item.strip().upper() if uppercase else item.strip()
-        for raw in values
-        for item in str(raw).split(",")
-        if item.strip()
-    }
-    return normalized or None
-
-
-def _parse_positive_int(value: int | str, name: str) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError) as exc:
-        raise RequestQueryError(f"{name} must be an integer") from exc
-    if parsed < 1:
-        raise RequestQueryError(f"{name} must be >= 1")
-    return parsed
 
 
 def _first_of_type(events: list[dict[str, Any]], event_type: str) -> dict[str, Any] | None:
