@@ -5,8 +5,15 @@ import pytest
 from asyncscope import AsyncScope
 from asyncscope.analysis import QueryError
 from asyncscope.config import (
+    MAX_BUFFER_SIZE,
+    MAX_INTERVAL_S,
+    MAX_THRESHOLD_S,
+    MIN_BUFFER_SIZE,
+    MIN_INTERVAL_S,
+    MIN_THRESHOLD_S,
     FeedbackState,
     apply_settings_patch,
+    limits,
     settings_payload,
     validate_patch,
 )
@@ -127,3 +134,59 @@ def test_feedback_records_both_kinds_and_counts_them():
 def test_feedback_rejects_an_unknown_kind():
     with pytest.raises(QueryError, match="kind must be one of"):
         FeedbackState().record("f1", "resolved")
+
+
+@pytest.mark.parametrize(
+    ("patch", "message"),
+    [
+        ({"threshold_s": 10.1}, "threshold_s"),
+        ({"interval_s": 10.1}, "interval_s"),
+        ({"buffer_size": 100_001}, "buffer_size"),
+    ],
+)
+def test_validate_patch_rejects_values_above_the_maximum(patch, message):
+    """기존 목록은 전부 하한·타입 쪽이었다. 상한이 실제로 막히는지 본다."""
+    with pytest.raises(QueryError, match=message):
+        validate_patch(patch)
+
+
+def test_validate_patch_accepts_the_exact_boundaries():
+    """경계에서 거부하면 UI가 limits로 만든 form이 서버에 막힌다."""
+    accepted = validate_patch(
+        {
+            "threshold_s": MAX_THRESHOLD_S,
+            "interval_s": MIN_INTERVAL_S,
+            "buffer_size": MAX_BUFFER_SIZE,
+        }
+    )
+
+    assert accepted == {
+        "threshold_s": MAX_THRESHOLD_S,
+        "interval_s": MIN_INTERVAL_S,
+        "buffer_size": MAX_BUFFER_SIZE,
+    }
+    assert validate_patch({"buffer_size": MIN_BUFFER_SIZE})["buffer_size"] == MIN_BUFFER_SIZE
+    assert validate_patch({"threshold_s": MIN_THRESHOLD_S})["threshold_s"] == MIN_THRESHOLD_S
+
+
+@pytest.mark.parametrize("value", ["pyproject.toml", "", "   ", 42, None])
+def test_validate_patch_rejects_a_project_root_that_is_not_a_directory(value):
+    with pytest.raises(QueryError, match="project_root"):
+        validate_patch({"project_root": value})
+
+
+def test_limits_matches_the_values_the_server_actually_enforces():
+    """UI가 limits로 form을 만든다. 손으로 고친 limits가 상수와 어긋나면 form이 거짓말을 한다."""
+    reported = limits()
+
+    assert reported["threshold_s"] == {"min": MIN_THRESHOLD_S, "max": MAX_THRESHOLD_S}
+    assert reported["interval_s"] == {"min": MIN_INTERVAL_S, "max": MAX_INTERVAL_S}
+    assert reported["buffer_size"] == {"min": MIN_BUFFER_SIZE, "max": MAX_BUFFER_SIZE}
+
+    for field, bounds in reported.items():
+        if "max" not in bounds:
+            continue
+        validate_patch({field: bounds["min"]})
+        validate_patch({field: bounds["max"]})
+        with pytest.raises(QueryError):
+            validate_patch({field: bounds["max"] * 2})
