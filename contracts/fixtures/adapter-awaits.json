@@ -93,6 +93,21 @@
       "library": "websockets"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 6004500000,
+      "request_id": "req-adapters",
+      "task_id": "Task-adapters",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 6005000000,
       "request_id": "req-adapters",

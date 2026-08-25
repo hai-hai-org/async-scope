@@ -36,6 +36,21 @@
       "label": "background task"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 4001500000,
+      "request_id": "req-background",
+      "task_id": "Task-request-background",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 4002000000,
       "request_id": "req-background",
@@ -247,6 +262,21 @@
       "confidence": null,
       "category": "cancelled",
       "label": "_background_job() cancelled"
+    },
+    {
+      "type": "response.start",
+      "timestamp_ns": 4105500000,
+      "request_id": "req-background-cancel",
+      "task_id": "Task-request-background-cancel",
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
     },
     {
       "type": "request.end",

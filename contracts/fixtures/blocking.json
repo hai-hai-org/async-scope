@@ -69,6 +69,21 @@
       "label": "blocking()"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 2312500000,
+      "request_id": "req-blocking",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 2313000000,
       "request_id": "req-blocking",
@@ -79,7 +94,8 @@
       "duration_ns": 313000000,
       "evidence": "observed",
       "confidence": null,
-      "status_code": 200
+      "status_code": 200,
+      "status": "completed"
     },
     {
       "type": "request.start",
@@ -132,6 +148,21 @@
       "label": "quick()"
     },
     {
+      "type": "response.start",
+      "timestamp_ns": 2316500000,
+      "request_id": "req-quick",
+      "task_id": null,
+      "span_id": null,
+      "parent_span_id": null,
+      "source": null,
+      "duration_ns": null,
+      "evidence": "observed",
+      "confidence": null,
+      "status_code": 200,
+      "category": "response",
+      "label": "HTTP 200"
+    },
+    {
       "type": "request.end",
       "timestamp_ns": 2317000000,
       "request_id": "req-quick",
@@ -142,7 +173,8 @@
       "duration_ns": 3000000,
       "evidence": "observed",
       "confidence": null,
-      "status_code": 200
+      "status_code": 200,
+      "status": "completed"
     }
   ]
 }

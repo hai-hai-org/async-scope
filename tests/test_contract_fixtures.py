@@ -33,6 +33,9 @@ EVENT_TYPES = {
     "loop.blocked",
 }
 EVIDENCE = {"observed", "inferred"}
+REQUEST_STATUSES = {"completed", "failed", "cancelled", "disconnected"}
+TASK_STATUSES = {"running", "completed", "failed", "cancelled"}
+TASK_OUTCOMES = {"returned", "raised", "cancelled"}
 FORBIDDEN_KEYS = {
     "args",
     "arguments",
@@ -118,6 +121,19 @@ def assert_normalized(event):
     for node in _walk(event):
         assert FORBIDDEN_KEYS.isdisjoint(node), event
 
+    if event["type"] == "response.start":
+        assert isinstance(event["status_code"], int), event
+        assert event["category"] == "response", event
+        assert event["label"] == f"HTTP {event['status_code']}", event
+
+    if event["type"] == "request.end":
+        assert event["status"] in REQUEST_STATUSES, event
+
+    if event["type"].startswith("task."):
+        assert event["status"] in TASK_STATUSES, event
+    if event["type"] in {"task.end", "task.cancel"}:
+        assert event["outcome"] in TASK_OUTCOMES, event
+
 
 def test_expected_fixture_files_exist():
     assert set(FIXTURES) == {
@@ -171,6 +187,23 @@ def test_timeline_fixture_has_overlapping_requests_and_suspend_resume():
         assert request_events.index("coroutine.suspend") < request_events.index(
             "coroutine.resume"
         )
+
+
+def test_response_start_precedes_request_end_when_response_exists():
+    for fixture in FIXTURES.values():
+        response_starts = {
+            event["request_id"]: event
+            for event in fixture["events"]
+            if event["type"] == "response.start"
+        }
+
+        for event in fixture["events"]:
+            if event["type"] != "request.end" or event["status_code"] is None:
+                continue
+
+            response_start = response_starts[event["request_id"]]
+            assert response_start["timestamp_ns"] <= event["timestamp_ns"], event
+            assert response_start["status_code"] == event["status_code"], event
 
 
 def test_blocking_fixture_keeps_loop_delay_inferred_and_unattributed():

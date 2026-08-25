@@ -21,16 +21,28 @@ class EventBuffer:
         if max_events < 1:
             raise ValueError("max_events must be greater than 0")
         self.max_events = max_events
-        self._events = deque(maxlen=max_events)
+        self._events = deque()
         self._next_sequence = 1
+        self.dropped_count = 0
 
     def append(self, event: dict) -> int:
         sequence = self._next_sequence
         self._next_sequence += 1
         stored = dict(event)
         stored["sequence"] = sequence
+        if len(self._events) == self.max_events:
+            self._events.popleft()
+            self.dropped_count += 1
         self._events.append(stored)
         return sequence
+
+    @property
+    def first_sequence(self) -> int | None:
+        return self._sequence_at(0)
+
+    @property
+    def last_sequence(self) -> int | None:
+        return self._sequence_at(-1)
 
     def snapshot(self) -> list[dict]:
         return [dict(event) for event in self._events]
@@ -40,11 +52,24 @@ class EventBuffer:
             return self.snapshot()
         return [dict(event) for event in self._events if event["sequence"] > cursor]
 
+    def cursor_was_dropped(self, cursor: int | None) -> bool:
+        first_sequence = self.first_sequence
+        return (
+            cursor is not None
+            and first_sequence is not None
+            and cursor < first_sequence - 1
+        )
+
     def clear(self) -> None:
         self._events.clear()
 
     def __len__(self) -> int:
         return len(self._events)
+
+    def _sequence_at(self, index: int) -> int | None:
+        if not self._events:
+            return None
+        return self._events[index]["sequence"]
 
 
 class EventBufferSink:
@@ -74,4 +99,4 @@ class EventBufferSink:
 
     @property
     def dropped_count(self) -> int:
-        return self.invalid_count
+        return self.buffer.dropped_count

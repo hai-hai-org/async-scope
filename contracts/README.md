@@ -41,6 +41,19 @@ Event-specific fields such as `method`, `path`, `status_code`, `category`,
 `outcome`, and `disconnect_reason` remain top-level fields so the dashboard can
 consume fixtures without depending on collector internals.
 
+## Transport buffer metadata
+
+`EventBuffer`는 bounded ring buffer다. 저장 시 `sequence`를 단조 증가 값으로 붙이고,
+최대 크기를 넘으면 가장 오래된 이벤트를 버린다. SSE/replay 소비자는 다음 값을 함께
+사용해야 한다.
+
+| Value | Meaning |
+| --- | --- |
+| `first_sequence` | 현재 buffer에 남아 있는 가장 오래된 이벤트 sequence |
+| `last_sequence` | 현재 buffer에 남아 있는 가장 최신 이벤트 sequence |
+| `dropped_count` | overflow로 buffer에서 밀려난 이벤트 수 |
+| `cursor_was_dropped(cursor)` | client cursor 이후 필요한 이벤트 일부가 이미 사라졌는지 여부 |
+
 ## Consumer mapping
 
 | Consumer | Reads |
@@ -69,6 +82,9 @@ consume fixtures without depending on collector internals.
   normalized fields that M1 collectors and query APIs must produce. They are
   consumer contracts, not proof that the current M0 collector already emits
   every normalized event.
+- `status_code`가 `null`이 아닌 `request.end`는 같은 `request_id`의
+  `response.start`를 가져야 한다. 취소/연결 해제처럼 응답이 시작되지 않은 request에는
+  `response.start`가 없을 수 있다.
 - Fixtures must not contain request/response body, headers, cookies, query
   string, function argument values, local variable values, environment values,
   or absolute filesystem paths.
@@ -85,8 +101,8 @@ consume fixtures without depending on collector internals.
 | Supported adapter labels | `adapter-awaits.json` | fixture-only |
 | Client disconnect | `disconnect.json` | fixture-only |
 
-M1 must still implement stable `task_id`, real `task.start/end/cancel`
-collection, adapter classifiers, and API/query behavior against this contract.
+M1 must still implement adapter classifiers and API/query behavior against this
+contract.
 
 ## Collector 구현 현황
 
@@ -127,5 +143,6 @@ collector가 추가로 내보내는 필드다. fixture에는 없지만 소비자
 - 실패한 Task의 판정에 `Task.exception()`을 쓴다. 그래서 asyncscope가 붙어 있으면 asyncio의
   "Task exception was never retrieved" 경고가 사라진다. 실패 사실은 `task.end status: "failed"`로
   대신 보인다.
-- `request.end`의 `status`는 collector가 항상 내보낸다. `timeline.json`, `blocking.json`,
-  `unknown-await.json`에는 이 필드가 없다 — 합의 후 fixture를 채우면 된다.
+- Thread/offload 상태는 현재 MVP collector 구현 범위 밖이다. `run_in_executor`나 별도
+  thread 작업을 정확히 수집하기 전까지 TimeDistribution은 이를 별도 `thread` 시간으로
+  단정하지 않는다.
