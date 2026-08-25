@@ -40,6 +40,7 @@ def test_export_payload_reports_buffer_snapshot_and_metadata():
         "dropped_count": 0,
         "first_sequence": 1,
         "last_sequence": 2,
+        "source": "live",
     }
     assert [event["type"] for event in payload["events"]] == ["one", "two"]
     assert [event["sequence"] for event in payload["events"]] == [1, 2]

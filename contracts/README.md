@@ -52,7 +52,21 @@ consume fixtures without depending on collector internals.
 | `first_sequence` | 현재 buffer에 남아 있는 가장 오래된 이벤트 sequence |
 | `last_sequence` | 현재 buffer에 남아 있는 가장 최신 이벤트 sequence |
 | `dropped_count` | overflow로 buffer에서 밀려난 이벤트 수 |
+| `source` | 남아 있는 이벤트의 출처. `live` \| `replay` \| `mixed` |
 | `cursor_was_dropped(cursor)` | client cursor 이후 필요한 이벤트 일부가 이미 사라졌는지 여부 |
+
+`source`는 **남아 있는 이벤트**로 판정한다. bool 하나로는 안 된다 — replay된 이벤트가 ring
+buffer에서 전부 밀려나면 buffer는 다시 `live`다.
+
+| 값 | 뜻 |
+| --- | --- |
+| `live` | 전부 이 프로세스가 수집한 것 |
+| `replay` | 전부 업로드된 capture |
+| `mixed` | replay 뒤에도 tracing이 돌아 남의 capture 위에 새 이벤트가 얹혔다 |
+
+`mixed`는 `DESIGN.md` TimelinePlot variants에 없는 상태다. `POST /replay`가 tracing을
+멈추지 않으므로 지금 구현이 실제로 만들어 낸다. 소비자는 이 상태를 신뢰할 수 있는 데이터로
+취급하지 않는 게 안전하다.
 
 **상한을 넘으면 request가 목록에서 통째로 사라진다.** `request.start`가 밀려난 request는
 `group_by_request`가 묶어도 summary를 만들 수 없어(시작 시각·method·path를 모른다) query
@@ -81,7 +95,8 @@ export payload:
     "max_events": 1000,
     "dropped_count": 0,
     "first_sequence": 1,
-    "last_sequence": 2
+    "last_sequence": 2,
+    "source": "live"
   },
   "events": ["...normalized event with storage-owned sequence..."]
 }
@@ -91,6 +106,16 @@ export payload:
 외부 값이라 신뢰하지 않고 제거한다. buffer를 교체한 뒤 `EventBuffer`가 새 sequence를
 1부터 다시 부여한다. 잘못된 JSON, object가 아닌 payload, schema mismatch, list가 아닌
 `events`, object가 아닌 event는 `400 bad_request`다.
+
+**replay는 live buffer를 덮는다.** 따라오는 결과를 소비자가 알아야 한다.
+
+- `buffer.source`가 `replay`가 된다. tracing은 멈추지 않으므로 그 뒤 첫 live 이벤트에서
+  `mixed`로 넘어간다
+- `status`는 여전히 `running`이다. collector 상태와 데이터 출처는 다른 축이다 — tracing이
+  돌면서 replay 데이터를 갖는 상태가 실제로 존재하므로 하나의 값으로 둘을 말할 수 없다
+- `sequence`가 1부터 다시 시작하므로 **연결돼 있던 SSE client의 cursor가 새 sequence보다
+  커진다.** `cursor_was_dropped()`가 `False`라 gap 이벤트도 나가지 않고 client는 조용히
+  아무것도 받지 못한다. replay 후에는 client가 cursor 없이 다시 연결해야 한다
 
 ## SSE event stream API
 
@@ -312,7 +337,8 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
     "max_events": 1000,
     "dropped_count": 0,
     "first_sequence": 1,
-    "last_sequence": 11
+    "last_sequence": 11,
+    "source": "live"
   }
 }
 ```
@@ -325,7 +351,16 @@ AppShell의 MetricCard 다섯 장이 소비한다. 별도 counter를 두지 않�
   잴 수 없는 것은 다르다. window 안에 요청이 없었을 뿐이면 `0.0`이다.
 - `active_requests`는 window로 자르지 않는다. window 전에 시작해 아직 도는 request가
   빠지면 안 된다.
-- `buffer` 블록의 필드 이름은 SSE `asyncscope.gap` payload와 같다.
+- `buffer` 블록은 export payload와 같은 함수가 만든다. 필드 이름은 SSE
+  `asyncscope.gap` payload와도 같다.
+- **`buffer.source`가 `live`가 아니면 window anchor가 바뀐다.** `timestamp_ns`는
+  `perf_counter_ns`로 프로세스 상대값이라, replay된 이벤트를 지금 perf_counter와 비교할 수
+  없다. 그대로 재면 window가 벌어져 capture 전체가 밖으로 밀려나고 `blocking_count: 0`,
+  `request_rate_per_second: 0.0`이 된다 — capture의 존재 이유가 그 둘일 때도 그렇다.
+  그래서 replay된 buffer는 **가장 최근 이벤트 시각**을 anchor로 쓴다. `measured_window_ns`가
+  capture의 구간을 뜻하게 되고 rate·loop delay·blocking count가 capture를 설명한다.
+- `server_time`은 **응답을 만든 시각**이지 데이터의 시각이 아니다. replay 중에도 실제
+  벽시계다. `measured_window_ns`와 섞어 계산하지 않는다.
 - `loop_delay`와 finding의 blocking 구간 길이는 이벤트의 `delay_ns`와 정확히 같다.
   `gap_start_ns`는 `emit()`이 `timestamp_ns`를 찍기 직전에 읽은 값이라, `timestamp_ns`까지를
   구간 끝으로 쓰면 emit 자신의 몇 µs가 loop 지연에 섞인다.

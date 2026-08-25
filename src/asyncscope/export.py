@@ -43,13 +43,14 @@ def validate_replay_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return cleaned
 
 
-def buffer_metadata(buffer) -> dict[str, int | None]:
+def buffer_metadata(buffer) -> dict[str, Any]:
     return {
         "events": len(buffer),
         "max_events": buffer.max_events,
         "dropped_count": buffer.dropped_count,
         "first_sequence": buffer.first_sequence,
         "last_sequence": buffer.last_sequence,
+        "source": buffer.source,
     }
 
 

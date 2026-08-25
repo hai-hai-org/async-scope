@@ -16,7 +16,7 @@ from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
 from ..config import apply_settings_patch, settings_payload
-from ..export import export_payload, replay_into
+from ..export import buffer_metadata, export_payload, replay_into
 from ..source import read_snippet
 from .sse import handle_sse
 
@@ -124,9 +124,10 @@ def _summary(app_scope, params: dict[str, list[str]]) -> dict:
     값이고, poll 실패나 SSE 끊김은 client만 안다. 서버는 자기가 아는 상태만 알려 준다.
     """
     buffer = app_scope.buffer
+    events = buffer.snapshot()
     payload = summarize(
-        buffer.snapshot(),
-        now_ns=time.perf_counter_ns(),
+        events,
+        now_ns=_metrics_anchor(events, buffer.source),
         window_s=_one(params, "window", str(DEFAULT_WINDOW_S)),
     )
     return {
@@ -135,14 +136,20 @@ def _summary(app_scope, params: dict[str, list[str]]) -> dict:
         "status": app_scope.status,
         "status_reason": app_scope.status_reason,
         **payload,
-        "buffer": {
-            "events": len(buffer),
-            "max_events": buffer.max_events,
-            "dropped_count": buffer.dropped_count,
-            "first_sequence": buffer.first_sequence,
-            "last_sequence": buffer.last_sequence,
-        },
+        "buffer": buffer_metadata(buffer),
     }
+
+
+def _metrics_anchor(events: list[dict], source: str) -> int:
+    """window를 어디에 붙일지. `timestamp_ns`는 perf_counter_ns로 프로세스 상대값이다.
+
+    replay된 이벤트는 남의 프로세스 축이라 지금 perf_counter와 비교할 수 없다. 그대로
+    쓰면 window가 벌어져 capture 전체가 밖으로 밀려나고 "blocking 없음, 트래픽 없음"이
+    된다. capture는 자기 시간축으로 재야 한다.
+    """
+    if source == "live" or not events:
+        return time.perf_counter_ns()
+    return max(event.get("timestamp_ns") or 0 for event in events)
 
 
 async def _handle_source(project_root: str | Path, params: dict[str, list[str]], send) -> None:

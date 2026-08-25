@@ -141,3 +141,36 @@ def test_event_buffer_sink_reports_overflow_drops_separately_from_invalid_input(
     assert [event["type"] for event in buffer.snapshot()] == ["two"]
     assert sink.invalid_count == 1
     assert sink.dropped_count == 1
+
+
+def test_source_tracks_where_the_remaining_events_came_from():
+    """지금 보는 게 live인지 replay인지 소비자가 알아야 한다."""
+    buffer = EventBuffer(max_events=4)
+    assert buffer.source == "live"
+
+    buffer.append({"type": "live"})
+    assert buffer.source == "live"
+
+    buffer.replace([{"type": "replayed"}, {"type": "replayed"}])
+    assert buffer.source == "replay"
+    assert buffer.replayed_through == 2
+
+    # replay 뒤에도 tracing이 돌면 남의 capture 위에 새 이벤트가 얹힌다.
+    buffer.append({"type": "live"})
+    assert buffer.source == "mixed"
+
+    # replay된 이벤트가 전부 밀려나면 buffer는 다시 live다. bool 하나로는 안 된다.
+    for _ in range(3):
+        buffer.append({"type": "live"})
+    assert buffer.first_sequence > buffer.replayed_through
+    assert buffer.source == "live"
+
+
+def test_clear_forgets_the_replay_trace():
+    buffer = EventBuffer(max_events=4)
+    buffer.replace([{"type": "replayed"}])
+    assert buffer.source == "replay"
+
+    buffer.clear()
+    assert buffer.replayed_through is None
+    assert buffer.source == "live"

@@ -25,6 +25,8 @@ class EventBuffer:
         self._events = deque()
         self._next_sequence = 1
         self.dropped_count = 0
+        # replace()로 들어온 마지막 sequence. 남아 있는 이벤트의 출처를 판정한다.
+        self.replayed_through: int | None = None
 
     def append(self, event: dict) -> int:
         sequence = self._next_sequence
@@ -63,6 +65,7 @@ class EventBuffer:
 
     def clear(self) -> None:
         self._events.clear()
+        self.replayed_through = None
 
     def replace(self, events: Iterable[dict]) -> None:
         """Replay/import용 교체.
@@ -75,6 +78,19 @@ class EventBuffer:
         self.dropped_count = 0
         for event in events:
             self.append(event)
+        self.replayed_through = self.last_sequence
+
+    @property
+    def source(self) -> str:
+        """남아 있는 이벤트의 출처. `live` | `replay` | `mixed`.
+
+        bool 하나로는 안 된다. replay된 이벤트가 ring buffer에서 전부 밀려나면 buffer는
+        다시 live다. `mixed`는 replay 뒤에도 tracing이 돌아 새 이벤트가 얹힌 상태다.
+        """
+        first, last = self.first_sequence, self.last_sequence
+        if self.replayed_through is None or first is None or first > self.replayed_through:
+            return "live"
+        return "mixed" if last > self.replayed_through else "replay"
 
     def __len__(self) -> int:
         return len(self._events)

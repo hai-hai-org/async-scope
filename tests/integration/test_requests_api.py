@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -328,3 +329,40 @@ async def test_summary_is_recomputed_on_every_poll(demo_app):
     assert second["server_time"] > first["server_time"]
     assert second["buffer"]["events"] > first["buffer"]["events"]
     assert second["buffer"]["last_sequence"] > first["buffer"]["last_sequence"]
+
+
+async def test_replayed_buffer_is_labeled_and_measured_on_its_own_clock(demo_app):
+    """replay는 live buffer를 덮는다. 그 뒤 metric이 capture를 설명해야 한다."""
+    fixture = json.loads(
+        (ROOT / "contracts" / "fixtures" / "blocking.json").read_text()
+    )
+    capture = {"schema_version": fixture["schema_version"], "events": fixture["events"]}
+
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/quick")
+            live = (await client.get("/__asyncscope__/api/summary")).json()
+
+            replay = await client.post("/__asyncscope__/api/replay", json=capture)
+            replayed = (await client.get("/__asyncscope__/api/summary")).json()
+
+            await client.get("/demo/quick")
+            mixed = (await client.get("/__asyncscope__/api/summary")).json()
+    finally:
+        scope.uninstall()
+
+    assert live["buffer"]["source"] == "live"
+    assert replay.status_code == 200
+    assert replay.json()["buffer"]["source"] == "replay"
+
+    # capture의 존재 이유가 300ms 블록이다. 0이라고 말하면 거짓이다.
+    assert replayed["buffer"]["source"] == "replay"
+    assert replayed["blocking_count"] == 1
+    assert replayed["loop_delay"]["max_ns"] == 300_000_000
+    assert replayed["request_rate_per_second"] > 0
+    # status는 collector 상태다. 데이터 출처와 다른 축이다.
+    assert replayed["status"] == "running"
+
+    assert mixed["buffer"]["source"] == "mixed"
