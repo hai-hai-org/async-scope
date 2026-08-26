@@ -1,4 +1,8 @@
-import type { ExportPayload, SummaryPayload } from "./schemas";
+import type {
+  ExportPayload,
+  RequestDetailPayload,
+  SummaryPayload,
+} from "./schemas";
 
 const API_PREFIX = "/__asyncscope__/api";
 
@@ -18,6 +22,14 @@ export async function fetchSummary(windowS = 60): Promise<SummaryPayload> {
 
 export async function fetchExport(): Promise<ExportPayload> {
   return fetchJson<ExportPayload>(`${API_PREFIX}/export`);
+}
+
+export async function fetchRequestDetail(
+  requestId: string,
+): Promise<RequestDetailPayload> {
+  return fetchJson<RequestDetailPayload>(
+    `${API_PREFIX}/requests/${encodeURIComponent(requestId)}`,
+  );
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -1,5 +1,8 @@
 import adapterFixture from "../../../contracts/fixtures/adapter-awaits.json";
+import backgroundTaskFixture from "../../../contracts/fixtures/background-task.json";
 import blockingFixture from "../../../contracts/fixtures/blocking.json";
+import disconnectFixture from "../../../contracts/fixtures/disconnect.json";
+import failureCancelFixture from "../../../contracts/fixtures/failure-cancel.json";
 import timelineFixture from "../../../contracts/fixtures/timeline.json";
 import unknownAwaitFixture from "../../../contracts/fixtures/unknown-await.json";
 import type {
@@ -142,6 +145,9 @@ export const eventFixtures = {
   blocking: blockingFixture.events as unknown as NormalizedEvent[],
   unknownAwait: unknownAwaitFixture.events as unknown as NormalizedEvent[],
   adapterAwaits: adapterFixture.events as unknown as NormalizedEvent[],
+  failureCancel: failureCancelFixture.events as unknown as NormalizedEvent[],
+  disconnect: disconnectFixture.events as unknown as NormalizedEvent[],
+  backgroundTask: backgroundTaskFixture.events as unknown as NormalizedEvent[],
 };
 
 export const fallbackExport: ExportPayload = {
