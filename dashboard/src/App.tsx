@@ -15,8 +15,10 @@ import type {
 } from "./shared/api/schemas";
 import { fallbackExport, fallbackSummary } from "./test/fixtures";
 
+const THEME_STORAGE_KEY = "asyncscope.theme";
+
 export default function App() {
-  const [isLightTheme, setIsLightTheme] = useState(false);
+  const [isLightTheme, setIsLightTheme] = useState(() => initialLightTheme());
   const [timelineClientStatus, setTimelineClientStatus] =
     useState<ClientStatus | null>(null);
   const [route] = useHashRoute();
@@ -41,7 +43,13 @@ export default function App() {
         (summary.state === "error" ? "disconnected" : "running"));
 
   useEffect(() => {
-    document.documentElement.dataset.theme = isLightTheme ? "light" : "dark";
+    const theme = isLightTheme ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // localStorage가 막혀도 theme 적용 자체는 유지한다.
+    }
   }, [isLightTheme]);
 
   return (
@@ -53,9 +61,19 @@ export default function App() {
       status={status}
       statusReason={summaryData?.status_reason}
     >
-      {renderRoute(route, summary, exportData, timelineEvents, {
-        onClientStatusChange: setTimelineClientStatus,
-      })}
+      {renderRoute(
+        route,
+        summary,
+        exportData,
+        timelineEvents,
+        {
+          onClientStatusChange: setTimelineClientStatus,
+        },
+        {
+          isLightTheme,
+          onThemeChange: setIsLightTheme,
+        },
+      )}
     </AppShell>
   );
 }
@@ -67,6 +85,10 @@ function renderRoute(
   timelineEvents: ExportPayload["events"] | undefined,
   timelineOptions: {
     onClientStatusChange: (status: ClientStatus | null) => void;
+  },
+  themeOptions: {
+    isLightTheme: boolean;
+    onThemeChange: (light: boolean) => void;
   },
 ) {
   if (route === "timeline") {
@@ -85,9 +107,22 @@ function renderRoute(
     return <AnalyzerPage />;
   }
   if (route === "settings") {
-    return <SettingsPage />;
+    return (
+      <SettingsPage
+        isLightTheme={themeOptions.isLightTheme}
+        onThemeChange={themeOptions.onThemeChange}
+      />
+    );
   }
   return <OverviewPage summary={summary} />;
+}
+
+function initialLightTheme() {
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY) === "light";
+  } catch {
+    return false;
+  }
 }
 
 function useHashRoute(): [RouteKey, (route: RouteKey) => void] {
