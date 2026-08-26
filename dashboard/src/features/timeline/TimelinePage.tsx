@@ -1,21 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchRequestDetail } from "../../shared/api/client";
 import type {
   BufferSource,
   ClientStatus,
   NormalizedEvent,
-  RequestDetailPayload,
 } from "../../shared/api/schemas";
 import type { SseStatus } from "../../shared/api/sse";
 import { useEventStream } from "../../shared/api/useEventStream";
 import { Button, Panel, StatusBadge } from "../../shared/ui";
 import { eventFixtures } from "../../test/fixtures";
+import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { RequestInspector } from "./RequestInspector";
 import { TimelinePlot } from "./TimelinePlot";
 import { TimelineToolbar } from "./TimelineToolbar";
 import {
   autoScrollStart,
-  buildFallbackRequestDetail,
   buildTimelineModel,
   clampViewportStart,
   createTimelineViewport,
@@ -45,12 +43,6 @@ type TimelinePageProps = {
   onClientStatusChange?: (status: ClientStatus | null) => void;
 };
 
-type DetailState = {
-  data: RequestDetailPayload | null;
-  errorMessage: string | null;
-  state: "idle" | "loading" | "ready" | "fallback" | "error";
-};
-
 export function TimelinePage({
   bufferSource,
   events,
@@ -66,12 +58,6 @@ export function TimelinePage({
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
-  const [detailReloadToken, setDetailReloadToken] = useState(0);
-  const [detailState, setDetailState] = useState<DetailState>({
-    state: "idle",
-    data: null,
-    errorMessage: null,
-  });
   const isFixtureMode = events === undefined;
   const sourceEvents = isFixtureMode ? eventFixtures[fixtureKey] : liveEvents;
   const zoomLevel = ZOOM_LEVELS[zoomIndex];
@@ -90,13 +76,11 @@ export function TimelinePage({
     selectedSegment && selectedSegment.rowId !== "__tasks"
       ? selectedSegment.rowId
       : null;
-  const fallbackDetail = useMemo(
-    () =>
-      selectedRequestId
-        ? buildFallbackRequestDetail(sourceEvents, selectedRequestId)
-        : null,
-    [selectedRequestId, sourceEvents],
-  );
+  const requestDetail = useRequestDetail({
+    fallbackEvents: sourceEvents,
+    fetchEnabled: !isFixtureMode,
+    requestId: selectedRequestId,
+  });
   const initialCursor = useMemo(() => latestCursor(events ?? []), [events]);
 
   useEffect(() => {
@@ -163,54 +147,6 @@ export function TimelinePage({
       setSelectedSegmentId(null);
     }
   }, [selectedSegment, selectedSegmentId]);
-
-  useEffect(() => {
-    const retryToken = detailReloadToken;
-    if (!selectedRequestId) {
-      setDetailState({
-        state: "idle",
-        data: null,
-        errorMessage: null,
-      });
-      return;
-    }
-    if (isFixtureMode) {
-      setDetailState({
-        state: fallbackDetail ? "fallback" : "error",
-        data: fallbackDetail,
-        errorMessage: fallbackDetail ? null : "fixture detail unavailable",
-      });
-      return;
-    }
-
-    let cancelled = false;
-    setDetailState({ state: "loading", data: null, errorMessage: null });
-    fetchRequestDetail(selectedRequestId)
-      .then((detail) => {
-        if (!cancelled) {
-          setDetailState({
-            state: "ready",
-            data: detail,
-            errorMessage: null,
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        setDetailState({
-          state: fallbackDetail ? "fallback" : "error",
-          data: fallbackDetail,
-          errorMessage:
-            error instanceof Error ? error.message : "request detail failed",
-        });
-      });
-    return () => {
-      void retryToken;
-      cancelled = true;
-    };
-  }, [detailReloadToken, fallbackDetail, isFixtureMode, selectedRequestId]);
 
   const togglePause = useCallback(() => {
     setIsPaused((paused) => {
@@ -394,11 +330,9 @@ export function TimelinePage({
 
       <section className="grid grid--two">
         <RequestInspector
-          detail={detailState.data}
-          errorMessage={detailState.errorMessage}
-          onRetry={() => setDetailReloadToken((value) => value + 1)}
+          detailState={requestDetail.state}
+          onRetry={requestDetail.reload}
           selectedSegment={selectedSegment}
-          state={detailState.state}
         />
         <Panel
           description="Timeline state vocabulary를 고정한다."

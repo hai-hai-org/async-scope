@@ -21,7 +21,7 @@ export const navItems: NavItem[] = [
 ];
 
 export function routeFromHash(hash: string): RouteKey {
-  const route = hash.replace(/^#\/?/, "");
+  const route = hash.replace(/^#\/?/, "").split("?")[0];
   if (isRoute(route)) {
     return route;
   }

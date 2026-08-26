@@ -1,6 +1,10 @@
 import type {
   ExportPayload,
   RequestDetailPayload,
+  RequestsListPayload,
+  RequestsQuery,
+  SourceLocation,
+  SourceSnippetPayload,
   SummaryPayload,
 } from "./schemas";
 
@@ -24,12 +28,54 @@ export async function fetchExport(): Promise<ExportPayload> {
   return fetchJson<ExportPayload>(`${API_PREFIX}/export`);
 }
 
+export async function fetchRequests(
+  query: RequestsQuery,
+): Promise<RequestsListPayload> {
+  return fetchJson<RequestsListPayload>(
+    `${API_PREFIX}/requests?${requestQueryString(query)}`,
+  );
+}
+
 export async function fetchRequestDetail(
   requestId: string,
 ): Promise<RequestDetailPayload> {
   return fetchJson<RequestDetailPayload>(
     `${API_PREFIX}/requests/${encodeURIComponent(requestId)}`,
   );
+}
+
+export async function fetchSourceSnippet(
+  source: SourceLocation,
+  radius = 5,
+): Promise<SourceSnippetPayload> {
+  const params = new URLSearchParams({
+    file: source.file,
+    line: String(source.line),
+    radius: String(radius),
+  });
+  return fetchJson<SourceSnippetPayload>(`${API_PREFIX}/source?${params}`);
+}
+
+function requestQueryString(query: RequestsQuery) {
+  const params = new URLSearchParams({
+    sort: query.sort,
+    order: query.order,
+    page: String(query.page),
+    page_size: String(query.page_size),
+  });
+  if (query.q) {
+    params.set("q", query.q);
+  }
+  if (query.status) {
+    params.set("status", query.status);
+  }
+  if (query.method) {
+    params.set("method", query.method);
+  }
+  if (query.path) {
+    params.set("path", query.path);
+  }
+  return params.toString();
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
