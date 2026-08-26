@@ -32,10 +32,14 @@ export type SummaryPayload = {
   buffer: BufferMetadata;
 };
 
-export type SourceLocation = {
+export type SourceReference = {
   file: string;
-  function: string;
   line: number;
+  function?: string | null;
+};
+
+export type SourceLocation = SourceReference & {
+  function: string;
 };
 
 export type NormalizedEvent = {
@@ -162,6 +166,76 @@ export type SourceSnippetPayload = {
   file: string;
   start_line: number;
   lines: string[];
+};
+
+export type FindingType = "blocking" | "long_wait" | "unattributed";
+
+export type FindingSeverity = "low" | "medium" | "high";
+
+export type FindingCertainty = "observed" | "candidate" | "unknown";
+
+export type FindingFeedbackKind = "acknowledged" | "false_positive";
+
+export type FindingFeedback = Record<FindingFeedbackKind, boolean>;
+
+export type FindingSuspect = {
+  source: SourceLocation | null;
+  label: string | null;
+  span_id: string | null;
+  request_id: string | null;
+  certainty: FindingCertainty;
+};
+
+export type FindingRequestRef = {
+  request_id: string;
+  method: string | null;
+  path: string | null;
+  started_at_ns: number;
+  ended_at_ns: number | null;
+};
+
+export type RecommendationStep = {
+  text: string;
+  source: SourceReference | null;
+};
+
+export type RecommendationPayload = {
+  kind: string;
+  certainty: FindingCertainty;
+  steps: RecommendationStep[];
+};
+
+export type FindingPayload = {
+  finding_id: string;
+  type: FindingType;
+  severity: FindingSeverity;
+  title: string;
+  evidence: Evidence;
+  confidence: number | null;
+  detected_at_ns: number;
+  duration_ns: number | null;
+  threshold_ns: number | null;
+  suspect: FindingSuspect | null;
+  affected_requests: FindingRequestRef[];
+  recommendation: RecommendationPayload;
+  feedback: FindingFeedback;
+};
+
+export type FindingsQuery = {
+  evidence?: Evidence;
+  page: number;
+  page_size: number;
+  request_id?: string;
+  severity?: FindingSeverity;
+  type?: FindingType;
+};
+
+export type FindingsListPayload = {
+  items: FindingPayload[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
 };
 
 export type ApiState<T> =

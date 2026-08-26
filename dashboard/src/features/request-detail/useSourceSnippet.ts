@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchSourceSnippet } from "../../shared/api/client";
 import type {
-  SourceLocation,
+  SourceReference,
   SourceSnippetPayload,
 } from "../../shared/api/schemas";
 
@@ -12,7 +12,7 @@ export type SourceSnippetState =
   | { state: "missing"; data: null; error: null }
   | { state: "error"; data: null; error: string };
 
-export function useSourceSnippet(source: SourceLocation | null, radius = 5) {
+export function useSourceSnippet(source: SourceReference | null, radius = 5) {
   const [reloadToken, setReloadToken] = useState(0);
   const [state, setState] = useState<SourceSnippetState>({
     state: "idle",

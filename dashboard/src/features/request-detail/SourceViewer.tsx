@@ -1,9 +1,9 @@
-import type { SourceLocation } from "../../shared/api/schemas";
+import type { SourceReference } from "../../shared/api/schemas";
 import { Button, EmptyState, Panel } from "../../shared/ui";
 import { useSourceSnippet } from "./useSourceSnippet";
 
 type SourceViewerProps = {
-  source: SourceLocation | null;
+  source: SourceReference | null;
 };
 
 export function SourceViewer({ source }: SourceViewerProps) {
