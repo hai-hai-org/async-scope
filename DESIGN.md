@@ -106,20 +106,40 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - UI primary: `"Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
 - Code and tabular data: `"JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace`
 - Noto Sans KR과 JetBrains Mono는 오프라인 데모를 위해 필요한 weight만 WOFF2로 package에 포함한다. 외부 font 요청을 만들지 않는다.
+- 구현: `dashboard/src/shared/styles/fonts/`에 5개 파일(약 2.2MB). Noto Sans KR은
+  fontsource의 통합 `korean` subset × weight 400/500/600/700 — 한글 11,172자와
+  Latin·숫자·문장부호를 모두 포함하므로 `latin` subset 파일과 `unicode-range` 분리가
+  필요하지 않다. JetBrains Mono는 variable(`wght` 100–800) `latin` 1개다.
+  `@font-face`는 `font-display: block`을 쓴다 — 폴백으로 먼저 그린 뒤 교체되면
+  mono 열 폭과 타임라인 정렬이 눈에 띄게 튄다. 라이선스는 `THIRD_PARTY_NOTICES.md`.
 
 ### Scale
 
 | Level | Size | Weight | Line height | Tracking | Usage |
 | --- | --- | --- | --- | --- | --- |
-| Display | 28px | 700 | 1.25 | -0.02em | 좁은 화면의 page title이 아닌 브랜드 wordmark |
-| H1 | 20px | 700 | 1.35 | -0.01em | page title |
-| H2 | 16px | 650 | 1.4 | -0.005em | panel title |
+| Display | 28px | 700 | 1.25 | -0.02em | 현재 소비처 없음 — 아래 주석 참조 |
+| H1 | 20px | 700 | 1.35 | -0.01em | page title, 사이드바 wordmark |
+| H2 | 16px | 600 | 1.4 | -0.005em | panel title, inspector 제목 |
 | H3 | 14px | 600 | 1.45 | 0 | detail subsection |
 | Body | 14px | 400 | 1.55 | 0 | 기본 UI text |
 | Body small | 13px | 400 | 1.5 | 0 | metadata와 도움말 |
 | Caption | 12px | 500 | 1.45 | 0.01em | 축 label, badge |
-| Metric | 22px | 650 | 1.2 | -0.01em | summary value |
+| Metric | 22px | 600 | 1.2 | -0.01em | summary value |
 | Code | 13px | 400 | 1.6 | 0 | source viewer, ID, timestamp |
+
+각 레벨은 `tokens.css`에서 `font` 단축 속성 토큰(`--text-h2` 등)으로 제공한다. 같은
+크기에서 굵기만 올려야 하는 경우(버튼, 표 머리, 배지)에 쓰는 `--weight-*` 토큰이
+함께 있다. `letter-spacing`은 단축 속성에 포함되지 않으므로 `--tracking-*`로 분리한다.
+
+**개정 이력**
+
+- H2·Metric의 weight를 `650` → `600`으로 정규화했다. `650`은 번들된 Noto Sans KR
+  정적 weight(400/500/600/700)에 없는 값이고, CSS 폰트 매칭 규칙상 `700`으로
+  올라가 의도보다 굵게 렌더링된다.
+- Display(28px)는 현재 소비처가 없다. page hero를 제거하면서 사용처가 사라졌고,
+  사이드바 wordmark에 적용하면 `28px/700`의 "AsyncScope"와 28px glyph가
+  192px 사이드바의 가용 폭(패딩 제외 160px)을 넘는다. 레벨은 남겨 두되
+  적용하지 않으며, 새 소비처가 생길 때 다시 판단한다.
 
 ### Typography rules
 
@@ -387,8 +407,9 @@ blur는 drawer backdrop에서 background dismissal을 설명할 때만 허용한
 
 ### Accepted debt
 
-현재 승인된 design 또는 accessibility debt는 없다. 새 debt는 위치, 영향받는 사용자, 심각도, 수정 방법, 담당자와 종료 조건을 이 표에 기록하고 사용자 승인을 받아야 한다.
+새 debt는 위치, 영향받는 사용자, 심각도, 수정 방법, 담당자와 종료 조건을 이 표에 기록하고 사용자 승인을 받아야 한다.
 
 | ID | Location | Severity | Affected users | Reason | Owner / Exit |
 | --- | --- | --- | --- | --- | --- |
-| 없음 | - | - | - | - | - |
+| DBT-1 | SourceViewer의 한국어 주석 줄 | Minor | 한국어 주석을 쓰는 프로젝트 | 번들한 JetBrains Mono는 `latin` subset이라 한글 글리프가 없다. 해당 줄만 Noto Sans KR로 폴백해 등폭이 깨지고 열이 어긋난다. 한글 등폭 폰트를 추가하면 번들이 MB 단위로 커진다. | `z` / 한글 등폭 요구가 실제로 제기되면 재검토 |
+| DBT-2 | 상태 배지·내비게이션·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` `⚙` 등 15종)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. | `z` / icon을 SVG로 전환할 때 종료 |

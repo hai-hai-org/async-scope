@@ -5,6 +5,44 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas,
     monospace;
 
+  /* Typography scale — DESIGN.md §3.
+   * font 단축 속성으로 묶어 두면 사용처에서 크기와 굵기·행간이 따로 흐트러지지
+   * 않는다. letter-spacing은 단축 속성에 포함되지 않으므로 별도 토큰이다.
+   * weight는 실제로 번들된 400/500/600/700만 쓴다. */
+  --text-display: 700 28px / 1.25 var(--font-ui);
+  --text-h1: 700 20px / 1.35 var(--font-ui);
+  --text-h2: 600 16px / 1.4 var(--font-ui);
+  --text-h3: 600 14px / 1.45 var(--font-ui);
+  --text-body: 400 14px / 1.55 var(--font-ui);
+  --text-body-sm: 400 13px / 1.5 var(--font-ui);
+  --text-caption: 500 12px / 1.45 var(--font-ui);
+  --text-metric: 600 22px / 1.2 var(--font-mono);
+  --text-code: 400 13px / 1.6 var(--font-mono);
+  /* 디자인 레벨이 아니라 플랫폼 제약이다. iOS Safari는 16px 미만 폼 컨트롤에
+   * 포커스하면 페이지를 확대한다 (DESIGN.md §3의 "모바일 form control 16px 이상"). */
+  --text-form-touch: 400 16px / 1.5 var(--font-ui);
+
+  /* 단축 속성은 크기와 굵기를 함께 정하므로, 같은 크기에서 굵기만 올려야 하는
+   * 경우(버튼, 표 머리, 배지)를 위해 weight를 따로 노출한다. 번들된 값만 쓴다. */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-display: -0.02em;
+  --tracking-h1: -0.01em;
+  --tracking-h2: -0.005em;
+  --tracking-caption: 0.01em;
+
+  /* Motion — DESIGN.md §6. transform·opacity·color 계열에만 쓴다. */
+  --motion-instant: 0ms;
+  --motion-micro: 120ms;
+  --motion-standard: 180ms;
+  --motion-panel: 240ms;
+  --ease-micro: ease-out;
+  --ease-standard: ease-in-out;
+  --ease-panel: cubic-bezier(0.2, 0.8, 0.2, 1);
+
   --surface-canvas: #04111b;
   --surface-sidebar: #061522;
   --surface-panel: #091b28;

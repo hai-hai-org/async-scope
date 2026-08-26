@@ -1,3 +1,4 @@
+@import "./fonts.css";
 @import "./tokens.css";
 
 * {
@@ -8,9 +9,10 @@ html {
   min-inline-size: 320px;
   background: var(--surface-canvas);
   color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.55;
+  font: var(--text-body);
+  /* 한국어 어절이 중간에서 끊기지 않게 한다 (DESIGN.md §3).
+   * 긴 ID·경로는 개별 규칙의 overflow-wrap이 넘칠 때만 강제 분리한다. */
+  word-break: keep-all;
 }
 
 body {
@@ -115,9 +117,8 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font: var(--text-h1);
+  letter-spacing: var(--tracking-h1);
 }
 
 .brand__glyph {
@@ -137,7 +138,8 @@ a {
 .eyebrow,
 .field-help {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .sidebar__footer {
@@ -149,7 +151,7 @@ a {
 .sidebar__footer-title {
   margin: 0;
   color: var(--text-secondary);
-  font-weight: 650;
+  font: var(--text-h3);
 }
 
 .sidebar__snippet {
@@ -159,9 +161,7 @@ a {
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
+  font: var(--text-code);
   /* 192px sidebar에서 잘리지 않게 접는다. scroll은 좁은 rail에서 발견되지 않는다. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -183,6 +183,10 @@ a {
   border-radius: var(--radius-control);
   color: var(--text-secondary);
   text-decoration: none;
+  transition:
+    background-color var(--motion-micro) var(--ease-micro),
+    color var(--motion-micro) var(--ease-micro),
+    border-color var(--motion-micro) var(--ease-micro);
 }
 
 .nav-item[aria-current="page"] {
@@ -233,13 +237,12 @@ a {
   max-inline-size: 68ch;
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
-  word-break: keep-all;
+  font: var(--text-body-sm);
 }
 
 .header__error {
   color: var(--status-error);
-  font-size: 12px;
+  font: var(--text-caption);
 }
 
 .footer {
@@ -250,9 +253,8 @@ a {
 
 .header__title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  font: var(--text-h1);
+  letter-spacing: var(--tracking-h1);
 }
 
 .header__meta,
@@ -287,7 +289,7 @@ a {
   max-inline-size: 680px;
   margin: var(--space-1) 0 0;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
   overflow-wrap: anywhere;
 }
 
@@ -368,13 +370,14 @@ a {
 
 .metadata-grid dt {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .metadata-grid dd {
   margin: var(--space-1) 0 0;
   overflow-wrap: anywhere;
-  font-family: var(--font-mono);
+  font: var(--text-code);
 }
 
 @media (max-width: 1279px) {
@@ -434,7 +437,7 @@ a {
   .nav-item {
     min-block-size: var(--control-touch);
     padding-inline: var(--space-1);
-    font-size: 11px;
+    font: var(--text-caption);
   }
 
   .nav-label {

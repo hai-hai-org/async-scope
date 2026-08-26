@@ -23,14 +23,14 @@ export default function App() {
   const [reloadToken, setReloadToken] = useState(0);
   const summary = useSummary(reloadToken);
   const exportState = useExport(reloadToken);
-  const summaryData = payloadOf(summary);
+  const summaryData = payloadOf(summary.state);
   const exportData = payloadOf(exportState);
   const reload = () => setReloadToken((token) => token + 1);
   const status =
     route === "timeline" && timelineClientStatus
       ? timelineClientStatus
       : (summaryData?.status ??
-        (summary.state === "error" ? "disconnected" : "running"));
+        (summary.state.state === "error" ? "disconnected" : "running"));
 
   useEffect(() => {
     const theme = isLightTheme ? "light" : "dark";
@@ -69,7 +69,7 @@ type RouteContext = {
   onClientStatusChange: (status: ClientStatus | null) => void;
   onRetry: () => void;
   onThemeChange: (light: boolean) => void;
-  summary: ApiState<SummaryPayload>;
+  summary: SummaryState;
 };
 
 function renderRoute(route: RouteKey, context: RouteContext) {
@@ -126,48 +126,85 @@ function useHashRoute(): RouteKey {
   return route;
 }
 
-function useSummary(reloadToken: number): ApiState<SummaryPayload> {
+/** 지표를 이 주기로 다시 읽는다. summary는 메모리 집계라 비용이 낮다. */
+const SUMMARY_POLL_MS = 2000;
+
+export type SummaryState = {
+  state: ApiState<SummaryPayload>;
+  /** 마지막 조회가 실패해 이전 값을 그대로 보여주는 중인가. */
+  isStale: boolean;
+};
+
+function useSummary(reloadToken: number): SummaryState {
   const [summary, setSummary] = useState<ApiState<SummaryPayload>>({
     state: "loading",
     data: null,
     error: null,
   });
+  const [isStale, setIsStale] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken은 본문에서 읽지 않고 다시 요청하라는 신호로만 쓴다.
   useEffect(() => {
     let cancelled = false;
+    let hasData = false;
+
+    const load = () => {
+      if (document.visibilityState === "hidden") {
+        // 탭이 숨은 동안 대상 앱의 event loop를 깨우지 않는다.
+        return;
+      }
+      fetchSummary()
+        .then((payload) => {
+          if (cancelled) {
+            return;
+          }
+          hasData = true;
+          setIsStale(false);
+          setSummary({
+            state: payload.buffer.events === 0 ? "empty" : "ready",
+            data: payload,
+            error: null,
+          });
+        })
+        .catch((error: unknown) => {
+          if (cancelled) {
+            return;
+          }
+          if (hasData) {
+            // 값을 지우면 깜빡이고, 옛 값을 live라고 하면 거짓이다.
+            // 마지막으로 읽은 값을 남기되 갱신되지 않았음을 표시한다.
+            setIsStale(true);
+            return;
+          }
+          // 아직 한 번도 못 읽었다. 수집값을 만들어내지 않는다.
+          setSummary({
+            state: "error",
+            data: null,
+            error: {
+              code: "api_error",
+              message:
+                error instanceof Error ? error.message : "summary failed",
+            },
+          });
+        });
+    };
+
     setSummary({ state: "loading", data: null, error: null });
-    fetchSummary()
-      .then((payload) => {
-        if (cancelled) {
-          return;
-        }
-        setSummary({
-          state: payload.buffer.events === 0 ? "empty" : "ready",
-          data: payload,
-          error: null,
-        });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) {
-          return;
-        }
-        // 수집값을 만들어내지 않는다. 못 읽었으면 못 읽었다고 표시한다.
-        setSummary({
-          state: "error",
-          data: null,
-          error: {
-            code: "api_error",
-            message: error instanceof Error ? error.message : "summary failed",
-          },
-        });
-      });
+    setIsStale(false);
+    load();
+
+    const timer = window.setInterval(load, SUMMARY_POLL_MS);
+    // 탭으로 돌아왔을 때 다음 tick까지 옛 값을 보여주지 않는다.
+    document.addEventListener("visibilitychange", load);
+
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
     };
   }, [reloadToken]);
 
-  return summary;
+  return { state: summary, isStale };
 }
 
 function useExport(reloadToken: number): ApiState<ExportPayload> {

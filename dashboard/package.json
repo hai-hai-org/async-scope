@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check": "biome check src"
+    "check": "biome check src",
+    "check:tokens": "! grep -rnE 'font-size: *[0-9]+px|font-weight: *[0-9]+' src --include=*.css | grep -v 'tokens.css' | grep -v 'fonts.css'"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

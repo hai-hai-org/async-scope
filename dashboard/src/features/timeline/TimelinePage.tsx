@@ -5,12 +5,12 @@ import {
   useMemo,
   useState,
 } from "react";
+import type { SummaryState } from "../../App";
 import type {
   ApiState,
   ClientStatus,
   ExportPayload,
   NormalizedEvent,
-  SummaryPayload,
 } from "../../shared/api/schemas";
 import { useEventStream } from "../../shared/api/useEventStream";
 import {
@@ -41,7 +41,7 @@ type TimelinePageProps = {
   exportState: ApiState<ExportPayload>;
   onClientStatusChange?: (status: ClientStatus | null) => void;
   onRetry?: () => void;
-  summary: ApiState<SummaryPayload>;
+  summary: SummaryState;
 };
 
 export function TimelinePage({
@@ -358,8 +358,8 @@ const LEGEND = [
   },
 ];
 
-function SummaryMetrics({ summary }: { summary: ApiState<SummaryPayload> }) {
-  const data = payloadOf(summary);
+function SummaryMetrics({ summary }: { summary: SummaryState }) {
+  const data = payloadOf(summary.state);
   const state = metricState(summary);
 
   return (
@@ -457,14 +457,18 @@ function payloadOf<T>(state: ApiState<T>): T | null {
   return state.state === "ready" || state.state === "empty" ? state.data : null;
 }
 
-function metricState(summary: ApiState<SummaryPayload>) {
-  if (summary.state === "loading") {
+function metricState(summary: SummaryState) {
+  if (summary.state.state === "loading") {
     return "loading";
   }
-  if (summary.state === "error") {
+  if (summary.state.state === "error") {
     return "unavailable";
   }
-  return summary.state === "empty" ? "empty" : "ready";
+  // 마지막 조회가 실패했으면 값이 남아 있어도 live라고 하지 않는다.
+  if (summary.isStale) {
+    return "stale";
+  }
+  return summary.state.state === "empty" ? "empty" : "ready";
 }
 
 function formatNumber(value: number | null | undefined) {
