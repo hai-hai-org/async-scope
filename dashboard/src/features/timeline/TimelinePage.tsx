@@ -263,6 +263,11 @@ export function TimelinePage({
       if (event.key === "a" || event.key === "A") {
         toggleAutoScroll();
       }
+      // 세그먼트 안에서는 화살표가 구간 이동을 담당한다 (roving tabindex).
+      // 여기서 viewport를 함께 움직이면 둘이 싸운다.
+      if (isInsideSegments(event.target)) {
+        return;
+      }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         panLeft();
@@ -597,6 +602,14 @@ function isTextEntry(target: EventTarget | null) {
     return false;
   }
   return Boolean(target.closest("input, textarea, select, [contenteditable]"));
+}
+
+/** 포커스가 타임라인 구간 목록 안에 있는가. */
+function isInsideSegments(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest(".timeline-segment"));
 }
 
 function isButtonLike(target: EventTarget | null) {

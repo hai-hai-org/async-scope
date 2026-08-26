@@ -152,6 +152,13 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
   한계: 프로세스가 정지하면 두 시계가 벌어진다. summary를 2초마다 polling해 기준점을
   갱신하므로 오차는 polling 주기 안으로 유지된다.
 - 주요 body text는 14px 미만으로 줄이지 않는다. 모바일 form control은 16px 이상이다.
+- 타이포 토큰은 **rem**이다(16px 기준, 0.875rem = 14px). `html`은 `font-size: 100%`로
+  두어 브라우저의 기본 글꼴 크기 설정과 텍스트 전용 확대를 그대로 받는다. px를 박으면
+  둘 다 무반응이 된다(WCAG 1.4.4). `font: var(--text-body)`는 `body`에 둔다 — `html`에
+  두면 rem이 root의 font-size를 자기 자신으로 참조하는 순환이 된다.
+- `--space-*`, `--control-*`, `--sidebar-*`, `--detail-wide`, `--timeline-label-col`은
+  px로 남긴다. 레이아웃 골격을 글꼴 크기에 묶으면 sticky 계산과 타임라인 기하가 함께
+  흔들린다. 그 대가는 §8 debt에 기록한다.
 - 긴 path와 함수명은 중간 ellipsis를 사용하고 focus/tooltip에서 전체 값을 제공한다.
 - 한국어 조사와 영문 기술 용어 사이의 줄바꿈으로 label이 잘리지 않도록 최소 너비와 `word-break: keep-all`을 검증한다.
 
@@ -339,6 +346,16 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - **Motion**: switch thumb만 transform한다. theme 변경은 180ms color transition이며 reduced motion에서는 즉시 적용한다.
 - **Safety**: 적용 전 경계값 validation, buffer 상한, project root 변경 시 명시적인 restart 안내를 제공한다.
 
+### Tooltip
+
+- **Structure**: trigger(icon-only control) + 짧은 라벨 한 줄 + arrow.
+- **Variants**: side top/right/bottom/left. icon rail의 nav는 right, toolbar는 bottom.
+- **States**: closed, open(hover), open(keyboard focus), dismissed(Escape).
+- **Accessibility**: 툴팁은 name이 아니라 description이다. trigger의 `aria-label`을
+  없애면 안 되고 Radix가 `aria-describedby`로 연결한다. Escape로 닫히며 그때 포커스는
+  trigger에 남는다. `prefers-reduced-motion`에서 등장 애니메이션을 제거한다.
+- **Layout**: portal로 띄우고 `--z-tooltip`, `--shadow-tooltip`을 쓴다.
+
 ### Empty, Loading, Error and Disconnected States
 
 - **Structure**: 상태 icon, 한 문장 설명, 가능한 다음 행동 하나.
@@ -409,7 +426,14 @@ blur는 drawer backdrop에서 background dismissal을 설명할 때만 허용한
 - Timeline의 모든 정보는 keyboard와 screen reader용 event list로 접근 가능해야 한다.
 - 상태, severity, 증거 수준은 색상 외에 label, icon, line style로 구분한다.
 - 200% browser zoom, 375px width, keyboard-only, screen reader reading order, high contrast, reduced motion을 검증한다.
-- icon-only control은 accessible name과 visible tooltip을 가진다.
+- icon-only control은 accessible name과 visible tooltip을 가진다. 툴팁은 `Tooltip`
+  컴포넌트(Radix)를 쓴다 — hover뿐 아니라 keyboard focus에서 뜨고 Escape로 닫혀야
+  하며(WCAG 1.4.13), CSS `::after` 툴팁은 Escape로 닫을 수 없어 이 기준을 만족하지 못한다.
+- accessible name은 aria 속성 유무가 아니라 **브라우저가 계산한 이름**으로 검증한다
+  (CDP `Accessibility.getFullAXTree`). 뷰포트×라우트 전 조합에서 이름 없는 interactive
+  요소가 0개여야 한다.
+- 화면에서 라벨을 감출 때 `display: none`을 쓰지 않는다. 접근성 트리에서도 지워져
+  이름이 사라진다(icon rail의 nav-item이 그랬다). 화면 전용 숨김을 쓴다.
 - Korean/English 혼합 label, 긴 path, CJK line box가 잘리거나 겹치지 않아야 한다.
 - 새로운 blocking alert가 focus를 빼앗지 않으며 count만 polite live region으로 알린다.
 - recommendation은 원인과 해결 행동을 짧은 문장으로 제공하고, 추론인 경우 그 사실을 먼저 표시한다.
@@ -430,6 +454,7 @@ blur는 drawer backdrop에서 background dismissal을 설명할 때만 허용한
 | ID | Location | Severity | Affected users | Reason | Owner / Exit |
 | --- | --- | --- | --- | --- | --- |
 | DBT-1 | SourceViewer의 한국어 주석 줄 | Minor | 한국어 주석을 쓰는 프로젝트 | 번들한 JetBrains Mono는 `latin` subset이라 한글 글리프가 없다. 해당 줄만 Noto Sans KR로 폴백해 등폭이 깨지고 열이 어긋난다. 한글 등폭 폰트를 추가하면 번들이 MB 단위로 커진다. | `z` / 한글 등폭 요구가 실제로 제기되면 재검토 |
+| DBT-5 | 고정 폭 상자 안의 확대된 텍스트 | Minor | 브라우저 기본 글꼴을 크게 쓰는 사용자 | 타이포는 rem이지만 레이아웃 토큰은 px다. 기본 글꼴 150%에서 `.sidebar`가 34px, `.timeline-row__label`이 9px 넘치는 등 21건의 국소 넘침이 생긴다(문서 수평 스크롤은 0px로 페이지는 깨지지 않는다). 레이아웃을 rem으로 바꾸면 sticky 계산과 타임라인 기하가 함께 흔들리므로 지금은 받아들인다. | `z` / 레이아웃 토큰 rem 전환을 별도로 다룰 때 종료 |
 | DBT-4 | Timeline playhead | Minor | 특정 시점을 집어 보려는 사용자 | playhead가 1px 실선 + 10px handle이고 keyboard focus를 받지만, 드래그로 임의 시점으로 옮기는 스크럽은 없다. 현재 playhead는 "지금"을 가리키며 zoom anchor로만 쓰인다. 스크럽은 별 기능이라 실제 요구가 생길 때 다룬다. | `z` / 시점 지정 요구가 제기되면 종료 |
 | DBT-3 | Analyzer 목록의 열 헤더 | Minor | finding을 정렬해 보려는 사용자 | `FindingsQuery`에 sort 파라미터가 없다. 현재 페이지만 클라이언트에서 정렬하면 서버 pagination과 어긋나 사용자를 오해시키므로 정렬 헤더를 제공하지 않는다. `Table` 프리미티브는 `sort` prop을 optional로 받으므로 백엔드가 지원하면 바로 켜진다. | `m` / findings API에 sort 추가 시 종료 |
 | DBT-2 | 상태 배지·내비게이션·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` `⚙` 등 15종)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. | `z` / icon을 SVG로 전환할 때 종료 |

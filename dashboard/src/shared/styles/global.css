@@ -7,9 +7,13 @@
 
 html {
   min-inline-size: 320px;
+  /* 브라우저의 기본 글꼴 크기 설정을 그대로 존중한다. 여기에 px를 박으면
+   * 사용자가 글씨를 키워도 화면이 반응하지 않는다.
+   * font: var(--text-body)를 여기에 두면 rem 토큰이 root의 font-size를
+   * 자기 자신으로 참조하는 순환이 되므로 body로 내린다. */
+  font-size: 100%;
   background: var(--surface-canvas);
   color: var(--text-primary);
-  font: var(--text-body);
   /* 한국어 어절이 중간에서 끊기지 않게 한다 (DESIGN.md §3).
    * 긴 ID·경로는 개별 규칙의 overflow-wrap이 넘칠 때만 강제 분리한다. */
   word-break: keep-all;
@@ -18,6 +22,7 @@ html {
 body {
   margin: 0;
   min-block-size: 100dvh;
+  font: var(--text-body);
 }
 
 button,
@@ -385,9 +390,9 @@ a {
     grid-template-columns: var(--sidebar-compact) minmax(0, 1fr);
   }
 
+  /* 인터랙티브가 아니고 사이드바가 aria-label을 가지므로 완전히 감춰도 된다. */
   .brand__text,
   .brand__caption,
-  .nav-label,
   .sidebar__footer {
     display: none;
   }
@@ -403,6 +408,21 @@ a {
 
   .grid--three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* icon rail 구간(768~1279px)에서만 라벨을 화면에서 감춘다.
+ * display: none은 접근성 트리에서도 지우므로, 그러면 nav-item에 남는 것이
+ * aria-hidden인 아이콘뿐이라 링크가 이름 없는 상태가 된다 (WCAG 4.1.2).
+ * 범위를 좁혀 두지 않으면 375px의 bottom navigation 라벨까지 감춰진다. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .nav-label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

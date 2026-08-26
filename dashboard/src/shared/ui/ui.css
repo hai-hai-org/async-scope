@@ -367,6 +367,37 @@
   padding: var(--space-5);
 }
 
+/* P2에서 만든 --shadow-tooltip / --z-tooltip의 첫 소비처다. */
+.tooltip {
+  z-index: var(--z-tooltip);
+  max-inline-size: 22rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-tooltip);
+  color: var(--text-primary);
+  font: var(--text-body-sm);
+  word-break: keep-all;
+  animation: tooltip-in var(--motion-micro) var(--ease-micro);
+}
+
+.tooltip__arrow {
+  fill: var(--surface-raised);
+}
+
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
+}
+
 .table-wrap {
   min-inline-size: 0;
   overflow-x: auto;

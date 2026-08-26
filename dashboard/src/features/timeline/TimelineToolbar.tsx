@@ -1,6 +1,6 @@
 import type { BufferSource } from "../../shared/api/schemas";
 import type { SseStatus } from "../../shared/api/sse";
-import { Button, StatusBadge } from "../../shared/ui";
+import { Button, StatusBadge, Tooltip } from "../../shared/ui";
 
 type TimelineToolbarProps = {
   autoScroll: boolean;
@@ -58,25 +58,33 @@ export function TimelineToolbar({
         >
           {isPaused ? "Resume" : "Pause"}
         </Button>
-        <Button
-          aria-label="시간 범위 넓히기"
-          disabled={!canZoomOut}
-          onClick={onZoomOut}
-          size="sm"
-          variant="ghost"
-        >
-          −
-        </Button>
+        {/* icon-only이므로 accessible name(aria-label)과 visible tooltip을
+            둘 다 둔다 (DESIGN.md §8). 툴팁은 name이 아니라 description이다. */}
+        <Tooltip label="시간 범위 넓히기">
+          <Button
+            aria-label="시간 범위 넓히기"
+            disabled={!canZoomOut}
+            onClick={onZoomOut}
+            size="sm"
+            variant="ghost"
+          >
+            −
+          </Button>
+        </Tooltip>
         <span className="timeline-toolbar__window">{windowLabel}</span>
-        <Button
-          aria-label="시간 범위 좁히기"
-          disabled={!canZoomIn}
-          onClick={onZoomIn}
-          size="sm"
-          variant="ghost"
-        >
-          +
-        </Button>
+        {/* icon-only이므로 accessible name(aria-label)과 visible tooltip을
+            둘 다 둔다 (DESIGN.md §8). 툴팁은 name이 아니라 description이다. */}
+        <Tooltip label="시간 범위 좁히기">
+          <Button
+            aria-label="시간 범위 좁히기"
+            disabled={!canZoomIn}
+            onClick={onZoomIn}
+            size="sm"
+            variant="ghost"
+          >
+            +
+          </Button>
+        </Tooltip>
         <Button
           aria-pressed={isFitAll}
           onClick={onToggleFitAll}
@@ -85,24 +93,32 @@ export function TimelineToolbar({
         >
           전체
         </Button>
-        <Button
-          aria-label="이전 구간 보기"
-          disabled={!canPan}
-          onClick={onPanLeft}
-          size="sm"
-          variant="ghost"
-        >
-          ←
-        </Button>
-        <Button
-          aria-label="다음 구간 보기"
-          disabled={!canPan}
-          onClick={onPanRight}
-          size="sm"
-          variant="ghost"
-        >
-          →
-        </Button>
+        {/* icon-only이므로 accessible name(aria-label)과 visible tooltip을
+            둘 다 둔다 (DESIGN.md §8). 툴팁은 name이 아니라 description이다. */}
+        <Tooltip label="이전 구간 보기">
+          <Button
+            aria-label="이전 구간 보기"
+            disabled={!canPan}
+            onClick={onPanLeft}
+            size="sm"
+            variant="ghost"
+          >
+            ←
+          </Button>
+        </Tooltip>
+        {/* icon-only이므로 accessible name(aria-label)과 visible tooltip을
+            둘 다 둔다 (DESIGN.md §8). 툴팁은 name이 아니라 description이다. */}
+        <Tooltip label="다음 구간 보기">
+          <Button
+            aria-label="다음 구간 보기"
+            disabled={!canPan}
+            onClick={onPanRight}
+            size="sm"
+            variant="ghost"
+          >
+            →
+          </Button>
+        </Tooltip>
         <Button
           aria-pressed={autoScroll}
           onClick={onToggleAutoScroll}
