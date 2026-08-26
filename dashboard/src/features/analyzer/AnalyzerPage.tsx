@@ -6,11 +6,14 @@ import type {
   FindingsQuery,
   FindingType,
 } from "../../shared/api/schemas";
+import {
+  DEFAULT_FINDINGS_QUERY,
+  useFindings,
+} from "../../shared/api/useFindings";
 import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
 import { FindingDetail } from "./FindingDetail";
 import { FindingsTable } from "./FindingsTable";
 import { useFindingDetail } from "./useFindingDetail";
-import { DEFAULT_FINDINGS_QUERY, useFindings } from "./useFindings";
 
 type FindingsDraft = {
   evidence: "" | Evidence;

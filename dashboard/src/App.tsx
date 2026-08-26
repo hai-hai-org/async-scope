@@ -6,6 +6,7 @@ import { RequestsPage } from "./features/requests/RequestsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { TimelinePage } from "./features/timeline/TimelinePage";
 import { fetchExport, fetchSummary } from "./shared/api/client";
+import { type ClockAnchor, clockAnchorFrom } from "./shared/api/eventStore";
 import type {
   ApiState,
   ClientStatus,
@@ -74,7 +75,7 @@ type RouteContext = {
 
 function renderRoute(route: RouteKey, context: RouteContext) {
   if (route === "requests") {
-    return <RequestsPage />;
+    return <RequestsPage clockAnchor={context.summary.anchor} />;
   }
   if (route === "analyzer") {
     return <AnalyzerPage />;
@@ -133,6 +134,11 @@ export type SummaryState = {
   state: ApiState<SummaryPayload>;
   /** 마지막 조회가 실패해 이전 값을 그대로 보여주는 중인가. */
   isStale: boolean;
+  /**
+   * event 시각을 벽시계로 옮기는 기준점. 폴링마다 갱신되므로 프로세스가
+   * 잠깐 멈춰 두 시계가 벌어져도 오차가 폴링 주기 안으로 유지된다.
+   */
+  anchor: ClockAnchor | null;
 };
 
 function useSummary(reloadToken: number): SummaryState {
@@ -142,6 +148,7 @@ function useSummary(reloadToken: number): SummaryState {
     error: null,
   });
   const [isStale, setIsStale] = useState(false);
+  const [anchor, setAnchor] = useState<ClockAnchor | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken은 본문에서 읽지 않고 다시 요청하라는 신호로만 쓴다.
   useEffect(() => {
@@ -160,6 +167,7 @@ function useSummary(reloadToken: number): SummaryState {
           }
           hasData = true;
           setIsStale(false);
+          setAnchor(clockAnchorFrom(payload));
           setSummary({
             state: payload.buffer.events === 0 ? "empty" : "ready",
             data: payload,
@@ -191,6 +199,7 @@ function useSummary(reloadToken: number): SummaryState {
 
     setSummary({ state: "loading", data: null, error: null });
     setIsStale(false);
+    setAnchor(null);
     load();
 
     const timer = window.setInterval(load, SUMMARY_POLL_MS);
@@ -204,7 +213,7 @@ function useSummary(reloadToken: number): SummaryState {
     };
   }, [reloadToken]);
 
-  return { state: summary, isStale };
+  return { state: summary, isStale, anchor };
 }
 
 function useExport(reloadToken: number): ApiState<ExportPayload> {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchRequests } from "../../shared/api/client";
 import type {
   RequestsListPayload,
@@ -58,8 +58,13 @@ export function useRequests(query: RequestsQuery) {
     };
   }, [requestList]);
 
+  // identity를 고정한다. 렌더마다 새 함수면 이걸 의존성에 넣은 effect가 루프를 돈다.
+  const reload = useCallback(() => {
+    setReloadToken((value) => value + 1);
+  }, []);
+
   return {
-    reload: () => setReloadToken((value) => value + 1),
+    reload,
     state,
   };
 }

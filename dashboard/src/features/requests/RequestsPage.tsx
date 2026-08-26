@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ClockAnchor } from "../../shared/api/eventStore";
 import type {
   RequestOrder,
   RequestSort,
@@ -34,7 +35,11 @@ const REQUEST_STATUSES: RequestStatus[] = [
   "disconnected",
 ];
 
-export function RequestsPage() {
+export function RequestsPage({
+  clockAnchor,
+}: {
+  clockAnchor: ClockAnchor | null;
+}) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     () => requestIdFromHash(),
   );
@@ -111,6 +116,7 @@ export function RequestsPage() {
             onChange={setDraft}
           />
           <RequestsListBody
+            clockAnchor={clockAnchor}
             onSelect={selectRequest}
             onSort={applySort}
             query={query}
@@ -120,7 +126,7 @@ export function RequestsPage() {
           />
         </Panel>
 
-        <div className="requests-detail-desktop">
+        <div className="requests-detail-desktop detail-aside">
           <RequestDetailPanel
             detailState={detail.state}
             emptyDescription="목록에서 요청을 선택하면 상세 정보가 표시됩니다."
@@ -239,6 +245,7 @@ function RequestsFilters({
 }
 
 function RequestsListBody({
+  clockAnchor,
   onSelect,
   onSort,
   query,
@@ -246,6 +253,7 @@ function RequestsListBody({
   selectedRequestId,
   setQuery,
 }: {
+  clockAnchor: ClockAnchor | null;
   onSelect: (requestId: string) => void;
   onSort: (sort: RequestSort, order: RequestOrder) => void;
   query: RequestsQuery;
@@ -281,6 +289,7 @@ function RequestsListBody({
         />
       ) : (
         <RequestsTable
+          clockAnchor={clockAnchor}
           onSelect={onSelect}
           onSort={onSort}
           order={query.order}

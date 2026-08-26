@@ -145,6 +145,12 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 
 - 한글 UI는 primary font, 함수명·경로·ID·시간·수치는 mono font를 사용한다.
 - 수치에는 `font-variant-numeric: tabular-nums`를 적용해 stream update 시 폭이 흔들리지 않게 한다.
+- event의 `timestamp_ns`는 `perf_counter_ns`라 벽시계가 아니다. 사람이 읽는 시각이 필요한
+  자리(request 시작 시각, finding 감지 시각)는 summary가 나란히 읽어 주는
+  `(server_time, server_perf_counter_ns)` 기준점 쌍으로 변환한다. 24시간 표기를 쓴다.
+  기준점이 없으면 시각을 만들어내지 않고 상대 표기로 돌아간다.
+  한계: 프로세스가 정지하면 두 시계가 벌어진다. summary를 2초마다 polling해 기준점을
+  갱신하므로 오차는 polling 주기 안으로 유지된다.
 - 주요 body text는 14px 미만으로 줄이지 않는다. 모바일 form control은 16px 이상이다.
 - 긴 path와 함수명은 중간 ellipsis를 사용하고 focus/tooltip에서 전체 값을 제공한다.
 - 한국어 조사와 영문 기술 용어 사이의 줄바꿈으로 label이 잘리지 않도록 최소 너비와 `word-break: keep-all`을 검증한다.
@@ -211,7 +217,11 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - request label column은 wide에서 144px, compact에서 120px, narrow에서 row 위쪽 block으로 이동한다.
 - plot의 최소 내부 폭은 720px이다. narrow에서는 의도적으로 timeline reel만 수평 pan한다.
 - 선택 playhead는 1px 실선과 10px handle이며 keyboard focus를 받을 수 있다.
-- zoom 단계: 250ms, 500ms, 1s, 2s, 5s visible window.
+- zoom 단계: 250ms, 500ms, 1s, 2s, 5s visible window. 데이터가 창보다 짧으면 전 구간으로 줄인다.
+- `전체`는 단계가 아니라 별개 모드다. 버퍼에 있는 전 구간을 한 화면에 맞춘다. 5단계 상한이
+  5s이므로 이것 없이는 오래 실행한 앱의 전체 흐름을 다시 볼 방법이 없다.
+- 처음 열 때의 기본값은 `전체`다. 고정 1s 창으로 시작하면 트래픽이 드문 앱에서 빈 화면이
+  뜬다. "전체를 보고 좁혀 들어간다"가 기본 동작이다.
 
 ### Content stress
 
@@ -420,5 +430,6 @@ blur는 drawer backdrop에서 background dismissal을 설명할 때만 허용한
 | ID | Location | Severity | Affected users | Reason | Owner / Exit |
 | --- | --- | --- | --- | --- | --- |
 | DBT-1 | SourceViewer의 한국어 주석 줄 | Minor | 한국어 주석을 쓰는 프로젝트 | 번들한 JetBrains Mono는 `latin` subset이라 한글 글리프가 없다. 해당 줄만 Noto Sans KR로 폴백해 등폭이 깨지고 열이 어긋난다. 한글 등폭 폰트를 추가하면 번들이 MB 단위로 커진다. | `z` / 한글 등폭 요구가 실제로 제기되면 재검토 |
+| DBT-4 | Timeline playhead | Minor | 특정 시점을 집어 보려는 사용자 | playhead가 1px 실선 + 10px handle이고 keyboard focus를 받지만, 드래그로 임의 시점으로 옮기는 스크럽은 없다. 현재 playhead는 "지금"을 가리키며 zoom anchor로만 쓰인다. 스크럽은 별 기능이라 실제 요구가 생길 때 다룬다. | `z` / 시점 지정 요구가 제기되면 종료 |
 | DBT-3 | Analyzer 목록의 열 헤더 | Minor | finding을 정렬해 보려는 사용자 | `FindingsQuery`에 sort 파라미터가 없다. 현재 페이지만 클라이언트에서 정렬하면 서버 pagination과 어긋나 사용자를 오해시키므로 정렬 헤더를 제공하지 않는다. `Table` 프리미티브는 `sort` prop을 optional로 받으므로 백엔드가 지원하면 바로 켜진다. | `m` / findings API에 sort 추가 시 종료 |
 | DBT-2 | 상태 배지·내비게이션·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` `⚙` 등 15종)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. | `z` / icon을 SVG로 전환할 때 종료 |

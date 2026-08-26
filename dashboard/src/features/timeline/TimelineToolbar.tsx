@@ -1,7 +1,6 @@
 import type { BufferSource } from "../../shared/api/schemas";
 import type { SseStatus } from "../../shared/api/sse";
 import { Button, StatusBadge } from "../../shared/ui";
-import type { ZoomLevel } from "./timeline";
 
 type TimelineToolbarProps = {
   autoScroll: boolean;
@@ -11,6 +10,8 @@ type TimelineToolbarProps = {
   canReconnect: boolean;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  isFitAll: boolean;
+  onToggleFitAll: () => void;
   eventCount: number;
   isPaused: boolean;
   onPanLeft: () => void;
@@ -22,7 +23,6 @@ type TimelineToolbarProps = {
   onZoomOut: () => void;
   streamStatus: SseStatus;
   windowLabel: string;
-  zoomLevel: ZoomLevel;
 };
 
 export function TimelineToolbar({
@@ -33,6 +33,8 @@ export function TimelineToolbar({
   canReconnect,
   canZoomIn,
   canZoomOut,
+  isFitAll,
+  onToggleFitAll,
   eventCount,
   isPaused,
   onPanLeft,
@@ -44,7 +46,6 @@ export function TimelineToolbar({
   onZoomOut,
   streamStatus,
   windowLabel,
-  zoomLevel,
 }: TimelineToolbarProps) {
   return (
     <section className="timeline-toolbar" aria-label="타임라인 조작">
@@ -66,9 +67,7 @@ export function TimelineToolbar({
         >
           −
         </Button>
-        <span className="timeline-toolbar__window">
-          {windowLabel} · {zoomLevel}x
-        </span>
+        <span className="timeline-toolbar__window">{windowLabel}</span>
         <Button
           aria-label="시간 범위 좁히기"
           disabled={!canZoomIn}
@@ -77,6 +76,14 @@ export function TimelineToolbar({
           variant="ghost"
         >
           +
+        </Button>
+        <Button
+          aria-pressed={isFitAll}
+          onClick={onToggleFitAll}
+          size="sm"
+          variant={isFitAll ? "primary" : "ghost"}
+        >
+          전체
         </Button>
         <Button
           aria-label="이전 구간 보기"
@@ -112,11 +119,10 @@ export function TimelineToolbar({
         >
           {streamStatus}
         </StatusBadge>
-        {bufferSource ? (
-          <StatusBadge
-            icon={bufferSource === "live" ? "●" : "↺"}
-            tone="inferred"
-          >
+        {/* stream 상태 배지와 나란히 "live"를 또 띄우면 같은 말을 두 번 한다.
+            replay/mixed처럼 예외일 때만 알린다. */}
+        {bufferSource && bufferSource !== "live" ? (
+          <StatusBadge icon="↺" tone="inferred">
             {bufferSource}
           </StatusBadge>
         ) : null}

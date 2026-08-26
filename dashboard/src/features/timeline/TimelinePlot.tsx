@@ -1,4 +1,5 @@
 import { useId, useMemo } from "react";
+import { type ClockAnchor, formatWallClock } from "../../shared/api/eventStore";
 import type {
   TimelineModel,
   TimelineSegment,
@@ -13,6 +14,7 @@ import {
 } from "./timeline";
 
 type TimelinePlotProps = {
+  clockAnchor: ClockAnchor | null;
   model: TimelineModel;
   onSelectSegment: (id: string) => void;
   playheadNs: number;
@@ -23,6 +25,7 @@ type TimelinePlotProps = {
 const TICK_COUNT = 5;
 
 export function TimelinePlot({
+  clockAnchor,
   model,
   onSelectSegment,
   playheadNs,
@@ -69,7 +72,7 @@ export function TimelinePlot({
         aria-label="실행 타임라인"
         className="timeline-reel"
       >
-        <div className="timeline-axis" aria-hidden="true">
+        <div className="timeline-axis">
           <div className="timeline-axis__labels">
             {ticks.map((tick) => (
               <span
@@ -89,8 +92,15 @@ export function TimelinePlot({
             ))}
             {showPlayhead ? (
               <span
+                aria-label="현재 시각 표시선"
+                aria-valuetext={formatWallClock(playheadNs, clockAnchor)}
                 className="timeline-playhead"
+                role="slider"
+                aria-valuenow={Math.round(playhead)}
+                aria-valuemin={0}
+                aria-valuemax={100}
                 style={{ insetInlineStart: `${playhead}%` }}
+                tabIndex={0}
               />
             ) : null}
           </div>
@@ -106,12 +116,14 @@ export function TimelinePlot({
               key={row.id}
             >
               <div className="timeline-row__label">
-                <strong className="truncate" title={row.label}>
-                  {row.label}
-                </strong>
-                <span>
-                  {row.status} · {formatDuration(row.durationNs)} ·{" "}
-                  {row.eventCount} events
+                <span className="timeline-row__start">
+                  {formatWallClock(row.startNs, clockAnchor)}
+                </span>
+                <span className="timeline-row__request">
+                  <span className="timeline-row__method">{row.method}</span>
+                  <span className="truncate" title={row.path || row.label}>
+                    {row.path || row.label}
+                  </span>
                 </span>
               </div>
               <div className="timeline-row__track">
@@ -134,6 +146,9 @@ export function TimelinePlot({
                   />
                 ) : null}
               </div>
+              <span className="timeline-row__total">
+                {formatDuration(row.durationNs)}
+              </span>
             </article>
           ))}
         </div>
@@ -164,7 +179,11 @@ function SegmentButton({
   // 트랙 오른쪽 끝에 붙는 세그먼트는 CSS의 min-inline-size(18px, 클릭 가능한
   // 최소 크기) 때문에 트랙을 넘어간다. 그런 경우엔 왼쪽이 아니라 오른쪽을
   // 기준으로 배치해 안쪽으로 자라게 한다.
-  const anchoredRight = offset + width >= 99.5;
+  //
+  // 임계값은 18px를 가장 좁은 트랙(compact 폭에서 약 488px) 기준으로 환산한
+  // 값이다: 18 / 488 ≈ 3.7%. 이보다 타이트하면(예: 0.5%) 폭이 0.35%인 슬리버가
+  // 왼쪽 기준으로 배치되어 min-inline-size만큼 밖으로 나간다.
+  const anchoredRight = offset + width >= 96;
   const style = anchoredRight
     ? { insetInlineEnd: 0, inlineSize: `${Math.max(width, 100 - offset)}%` }
     : { insetInlineStart: `${offset}%`, inlineSize: `${width}%` };
@@ -185,6 +204,11 @@ function SegmentButton({
     >
       <span aria-hidden="true">{segmentIcon(segment)}</span>
       <span className="truncate">{segment.label}</span>
+      {/* DESIGN.md §5 TimelineSegment: 구조에 duration이 들어간다.
+          라벨과 한 span에 묶으면 ellipsis가 시간부터 자른다. */}
+      <span className="timeline-segment__duration">
+        {formatDuration(segment.durationNs)}
+      </span>
       <span className="sr-only">
         {segment.kind}, {segment.evidence}, {formatDuration(segment.durationNs)}
       </span>

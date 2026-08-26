@@ -21,6 +21,11 @@ export type LoopDelaySummary = {
 
 export type SummaryPayload = {
   server_time: string;
+  /**
+   * server_time과 나란히 읽은 perf_counter 값. 이벤트의 timestamp_ns를 사람이 읽는
+   * 시각으로 옮기는 기준점이다. 둘 중 하나만 쓰면 변환할 수 없다.
+   */
+  server_perf_counter_ns: number;
   status: RuntimeStatus;
   status_reason: string | null;
   window_ns: number;

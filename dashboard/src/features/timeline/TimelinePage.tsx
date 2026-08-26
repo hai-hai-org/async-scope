@@ -15,12 +15,14 @@ import type {
 import { useEventStream } from "../../shared/api/useEventStream";
 import {
   Button,
+  Drawer,
   EmptyState,
   MetricCard,
   Panel,
   StatusBadge,
 } from "../../shared/ui";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
+import { BlockingAlert } from "./BlockingAlert";
 import { RequestInspector } from "./RequestInspector";
 import { TimelinePlot } from "./TimelinePlot";
 import { TimelineToolbar } from "./TimelineToolbar";
@@ -29,12 +31,16 @@ import {
   buildTimelineModel,
   clampViewportStart,
   createTimelineViewport,
+  DEFAULT_ZOOM_INDEX,
+  FIT_ALL,
   formatDuration,
   latestCursor,
   mergeTimelineEvents,
   panViewportStart,
   type TimelineSegment,
-  ZOOM_LEVELS,
+  ZOOM_WINDOWS_NS,
+  type ZoomSelection,
+  zoomKeepingAnchor,
 } from "./timeline";
 
 type TimelinePageProps = {
@@ -57,16 +63,19 @@ export function TimelinePage({
   const [pendingEvents, setPendingEvents] = useState<NormalizedEvent[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [zoomIndex, setZoomIndex] = useState(2);
+  // 처음 열면 버퍼에 있는 걸 다 보여준다. 고정 1s 창으로 시작하면 트래픽이
+  // 드문 앱에서 빈 화면이 뜬다. DESIGN.md는 5단계만 규정하고 초기값은 정하지
+  // 않으므로, "전체를 보고 좁혀 들어간다"를 기본 동작으로 둔다.
+  const [zoom, setZoom] = useState<ZoomSelection>(FIT_ALL);
   const [viewportStartNs, setViewportStartNs] = useState<number | undefined>();
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
-  const zoomLevel = ZOOM_LEVELS[zoomIndex];
+  const [detailOpen, setDetailOpen] = useState(false);
   const model = useMemo(() => buildTimelineModel(liveEvents), [liveEvents]);
   const viewport = useMemo(
-    () => createTimelineViewport(model, zoomLevel, viewportStartNs),
-    [model, viewportStartNs, zoomLevel],
+    () => createTimelineViewport(model, zoom, viewportStartNs),
+    [model, viewportStartNs, zoom],
   );
   const selectedSegment = selectedSegmentId
     ? findSegment(
@@ -98,10 +107,10 @@ export function TimelinePage({
   useEffect(() => {
     setViewportStartNs((current) =>
       autoScroll || current == null
-        ? autoScrollStart(model, zoomLevel)
-        : clampViewportStart(model, zoomLevel, current),
+        ? autoScrollStart(model, zoom)
+        : clampViewportStart(model, zoom, current),
     );
-  }, [autoScroll, model, zoomLevel]);
+  }, [autoScroll, model, zoom]);
 
   const handleStreamEvent = useCallback(
     (event: NormalizedEvent) => {
@@ -165,37 +174,62 @@ export function TimelinePage({
     });
   }, [autoScroll, pendingEvents]);
 
+  // 줌 단계를 옮길 때 화면상 playhead 위치를 유지한다. auto-scroll 중이면
+  // 다음 effect가 최신 위치로 다시 붙이므로 굳이 계산하지 않는다.
+  const applyZoom = useCallback(
+    (next: ZoomSelection) => {
+      setZoom(next);
+      if (!autoScroll) {
+        setViewportStartNs(
+          zoomKeepingAnchor(model, next, model.axisEndNs, viewport),
+        );
+      }
+    },
+    [autoScroll, model, viewport],
+  );
+
   const zoomIn = useCallback(() => {
-    setZoomIndex((index) => Math.min(ZOOM_LEVELS.length - 1, index + 1));
-  }, []);
+    // 창을 좁히는 방향. fit에서 들어오면 가장 넓은 단계부터 시작한다.
+    applyZoom(
+      zoom === FIT_ALL ? ZOOM_WINDOWS_NS.length - 1 : Math.max(0, zoom - 1),
+    );
+  }, [applyZoom, zoom]);
 
   const zoomOut = useCallback(() => {
-    setZoomIndex((index) => Math.max(0, index - 1));
-  }, []);
+    if (zoom === FIT_ALL) {
+      return;
+    }
+    applyZoom(Math.min(ZOOM_WINDOWS_NS.length - 1, zoom + 1));
+  }, [applyZoom, zoom]);
+
+  const toggleFitAll = useCallback(() => {
+    applyZoom(zoom === FIT_ALL ? DEFAULT_ZOOM_INDEX : FIT_ALL);
+  }, [applyZoom, zoom]);
 
   const panLeft = useCallback(() => {
     setAutoScroll(false);
     setViewportStartNs((current) =>
       panViewportStart(
         model,
-        zoomLevel,
-        current ?? autoScrollStart(model, zoomLevel),
+        zoom,
+        current ?? autoScrollStart(model, zoom),
         -1,
       ),
     );
-  }, [model, zoomLevel]);
+  }, [model, zoom]);
 
   const panRight = useCallback(() => {
     setAutoScroll(false);
     setViewportStartNs((current) =>
-      panViewportStart(
-        model,
-        zoomLevel,
-        current ?? autoScrollStart(model, zoomLevel),
-        1,
-      ),
+      panViewportStart(model, zoom, current ?? autoScrollStart(model, zoom), 1),
     );
-  }, [model, zoomLevel]);
+  }, [model, zoom]);
+
+  // compact 폭에서는 drawer로 열어야 상세가 보인다.
+  const selectSegment = useCallback((segmentId: string) => {
+    setSelectedSegmentId(segmentId);
+    setDetailOpen(true);
+  }, []);
 
   const toggleAutoScroll = useCallback(() => {
     setAutoScroll((current) => !current);
@@ -246,75 +280,112 @@ export function TimelinePage({
     <div className="dashboard-page">
       <SummaryMetrics summary={summary} />
 
-      <Panel title="Request Timeline">
-        <TimelineToolbar
-          autoScroll={autoScroll}
-          bufferSource={bufferSource}
-          bufferedCount={pendingEvents.length}
-          canPan={viewport.durationNs < model.durationNs}
-          canReconnect={
-            streamStatus === "gap" ||
-            streamStatus === "error" ||
-            streamStatus === "disconnected"
-          }
-          canZoomIn={zoomIndex < ZOOM_LEVELS.length - 1}
-          canZoomOut={zoomIndex > 0}
-          eventCount={liveEvents.length}
-          isPaused={isPaused}
-          onPanLeft={panLeft}
-          onPanRight={panRight}
-          onReconnect={reconnect}
-          onToggleAutoScroll={toggleAutoScroll}
-          onTogglePause={togglePause}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          streamStatus={streamStatus}
-          windowLabel={formatDuration(viewport.durationNs)}
-          zoomLevel={zoomLevel}
-        />
-        {stream.gap ? (
-          <div className="timeline-alert" role="alert">
-            <strong>이어지지 않은 구간이 있습니다</strong>
-            <span>
-              화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시 연결하면
-              현재 버퍼를 처음부터 읽습니다.
-            </span>
-          </div>
-        ) : null}
-        <TimelineBody
-          exportState={exportState}
-          hasRows={model.rows.length > 0}
-          onRetry={onRetry}
-        >
-          <TimelinePlot
-            model={model}
-            onSelectSegment={setSelectedSegmentId}
-            playheadNs={model.axisEndNs}
-            selectedSegmentId={selectedSegmentId}
-            viewport={viewport}
-          />
-        </TimelineBody>
-      </Panel>
-
-      <section className="grid grid--two">
-        <RequestInspector
-          detailState={requestDetail.state}
-          onRetry={requestDetail.reload}
-          selectedSegment={selectedSegment}
-        />
-        <Panel title="범례">
-          <div className="legend-grid">
-            {LEGEND.map((item) => (
-              <div className="legend-item" key={item.label}>
-                <StatusBadge icon={item.icon} tone={item.tone}>
-                  {item.label}
-                </StatusBadge>
-                <span>{item.meaning}</span>
+      <section className="timeline-layout">
+        <div className="timeline-main">
+          <Panel title="Request Timeline">
+            <TimelineToolbar
+              autoScroll={autoScroll}
+              bufferSource={bufferSource}
+              bufferedCount={pendingEvents.length}
+              canPan={viewport.durationNs < model.durationNs}
+              canReconnect={
+                streamStatus === "gap" ||
+                streamStatus === "error" ||
+                streamStatus === "disconnected"
+              }
+              canZoomIn={zoom === FIT_ALL || zoom > 0}
+              canZoomOut={zoom !== FIT_ALL && zoom < ZOOM_WINDOWS_NS.length - 1}
+              eventCount={liveEvents.length}
+              isFitAll={zoom === FIT_ALL}
+              isPaused={isPaused}
+              onPanLeft={panLeft}
+              onPanRight={panRight}
+              onReconnect={reconnect}
+              onToggleAutoScroll={toggleAutoScroll}
+              onToggleFitAll={toggleFitAll}
+              onTogglePause={togglePause}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              streamStatus={streamStatus}
+              windowLabel={formatDuration(viewport.durationNs)}
+            />
+            {stream.gap ? (
+              <div className="timeline-alert" role="alert">
+                <strong>이어지지 않은 구간이 있습니다</strong>
+                <span>
+                  화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시
+                  연결하면 현재 버퍼를 처음부터 읽습니다.
+                </span>
               </div>
-            ))}
-          </div>
-        </Panel>
+            ) : null}
+            <TimelineBody
+              exportState={exportState}
+              hasRows={model.rows.length > 0}
+              onRetry={onRetry}
+            >
+              <TimelinePlot
+                clockAnchor={summary.anchor}
+                model={model}
+                onSelectSegment={selectSegment}
+                playheadNs={model.axisEndNs}
+                selectedSegmentId={selectedSegmentId}
+                viewport={viewport}
+              />
+              {/* 범례는 플롯을 읽는 도구다. 별 panel로 떼어 두면 인스펙터
+                  자리를 빼앗고 플롯과 멀어진다. */}
+              <Legend />
+            </TimelineBody>
+          </Panel>
+
+          <BlockingAlert
+            blockingCount={payloadOf(summary.state)?.blocking_count ?? 0}
+            clockAnchor={summary.anchor}
+          />
+        </div>
+
+        <div className="timeline-detail-desktop detail-aside">
+          <RequestInspector
+            detailState={requestDetail.state}
+            onRetry={requestDetail.reload}
+            selectedSegment={selectedSegment}
+          />
+        </div>
+
+        <div className="timeline-detail-compact">
+          <Drawer
+            description={selectedSegment?.label ?? undefined}
+            onOpenChange={setDetailOpen}
+            open={detailOpen}
+            title="요청 상세"
+            trigger={
+              <Button disabled={!selectedSegment} size="sm" variant="ghost">
+                상세 보기
+              </Button>
+            }
+          >
+            <RequestInspector
+              detailState={requestDetail.state}
+              onRetry={requestDetail.reload}
+              selectedSegment={selectedSegment}
+            />
+          </Drawer>
+        </div>
       </section>
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="legend-grid">
+      {LEGEND.map((item) => (
+        <div className="legend-item" key={item.label}>
+          <StatusBadge icon={item.icon} tone={item.tone}>
+            {item.label}
+          </StatusBadge>
+          <span>{item.meaning}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -483,8 +554,10 @@ function formatServerTime(value: string) {
   if (Number.isNaN(date.valueOf())) {
     return value;
   }
+  // 행 시각과 같은 24시간 표기를 쓴다. 한 화면에서 표기가 갈리면 안 된다.
   return date.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
+    hour12: false,
     minute: "2-digit",
     second: "2-digit",
   });

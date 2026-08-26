@@ -8,6 +8,11 @@ import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
 import { SourceViewer } from "../request-detail/SourceViewer";
 import { formatDuration, formatTimestamp } from "../timeline/timeline";
 import { severityTone } from "./FindingsTable";
+import {
+  RecommendationSteps,
+  sameSource,
+  sourceLabel,
+} from "./RecommendationSteps";
 import type { FindingDetailState } from "./useFindingDetail";
 
 type FindingDetailProps = {
@@ -362,30 +367,11 @@ function RecommendationPanel({
           {finding.recommendation.certainty}
         </StatusBadge>
       </div>
-      <ol className="recommendation-steps">
-        {finding.recommendation.steps.map((step) => {
-          const selected = sameSource(selectedSource, step.source);
-          return (
-            <li key={recommendationStepKey(step)}>
-              <p>{step.text}</p>
-              {step.source ? (
-                <Button
-                  className={selected ? "is-active" : undefined}
-                  onClick={() => onSelectSource(step.source)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {sourceLabel(step.source)}
-                </Button>
-              ) : (
-                <span className="field-help">
-                  코드 위치 없음 · 측정 안내만 제공
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <RecommendationSteps
+        onSelectSource={onSelectSource}
+        selectedSource={selectedSource}
+        steps={finding.recommendation.steps}
+      />
     </section>
   );
 }
@@ -397,29 +383,6 @@ function firstFindingSource(finding: FindingPayload): SourceReference | null {
   return (
     finding.recommendation.steps.find((step) => step.source !== null)?.source ??
     null
-  );
-}
-
-function recommendationStepKey({
-  source,
-  text,
-}: FindingPayload["recommendation"]["steps"][number]) {
-  return `${text}-${source?.file ?? "none"}-${source?.line ?? "none"}`;
-}
-
-function sourceLabel(source: SourceReference | null) {
-  if (!source) {
-    return "—";
-  }
-  return `${source.file}:${source.line}`;
-}
-
-function sameSource(
-  left: SourceReference | null,
-  right: SourceReference | null,
-) {
-  return Boolean(
-    left && right && left.file === right.file && left.line === right.line,
   );
 }
 

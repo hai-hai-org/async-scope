@@ -92,6 +92,8 @@
   --sidebar-wide: 192px;
   --sidebar-compact: 72px;
   --detail-wide: 388px;
+  /* DESIGN.md §4 Timeline geometry: wide 144px, compact 120px. */
+  --timeline-label-col: 144px;
   --header-height: 60px;
   --footer-height: 44px;
 

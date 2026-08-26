@@ -1,12 +1,14 @@
+import { type ClockAnchor, formatWallClock } from "../../shared/api/eventStore";
 import type {
   RequestOrder,
   RequestSort,
   RequestSummary,
 } from "../../shared/api/schemas";
 import { StatusBadge, Table, type TableColumn } from "../../shared/ui";
-import { formatDuration, formatTimestamp } from "../timeline/timeline";
+import { formatDuration } from "../timeline/timeline";
 
 type RequestsTableProps = {
+  clockAnchor: ClockAnchor | null;
   onSelect: (requestId: string) => void;
   onSort: (sort: RequestSort, order: RequestOrder) => void;
   order: RequestOrder;
@@ -16,6 +18,7 @@ type RequestsTableProps = {
 };
 
 export function RequestsTable({
+  clockAnchor,
   onSelect,
   onSort,
   order,
@@ -73,7 +76,7 @@ export function RequestsTable({
       align: "end",
       numeric: true,
       sortKey: "started_at_ns",
-      render: (request) => formatTimestamp(request.started_at_ns),
+      render: (request) => formatWallClock(request.started_at_ns, clockAnchor),
     },
     {
       key: "events",

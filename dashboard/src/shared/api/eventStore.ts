@@ -200,8 +200,58 @@ export function formatDuration(ns: number | null | undefined): string {
   return `${ns}ns`;
 }
 
+/**
+ * 축 눈금처럼 시작점 기준 상대 시간이 맞는 자리에서 쓴다.
+ * 사람이 읽는 시각이 필요하면 formatWallClock을 쓴다.
+ */
 export function formatTimestamp(ns: number): string {
   return `${(ns / 1_000_000).toFixed(1)}ms`;
+}
+
+/**
+ * 서버가 나란히 읽어 준 (벽시계, perf_counter) 쌍. 이게 없으면 event의
+ * timestamp_ns를 사람이 읽는 시각으로 옮길 방법이 없다.
+ */
+export type ClockAnchor = {
+  wallMs: number;
+  perfNs: number;
+};
+
+export function clockAnchorFrom(summary: {
+  server_time: string;
+  server_perf_counter_ns: number;
+}): ClockAnchor | null {
+  const wallMs = new Date(summary.server_time).valueOf();
+  if (Number.isNaN(wallMs)) {
+    return null;
+  }
+  return { wallMs, perfNs: summary.server_perf_counter_ns };
+}
+
+/**
+ * 기준점이 없으면 시각을 만들어내지 않고 상대 표기로 돌아간다.
+ * 없는 기준으로 그럴듯한 시각을 보여 주는 것이 제일 나쁘다.
+ */
+export function formatWallClock(
+  ns: number,
+  anchor: ClockAnchor | null,
+): string {
+  if (!anchor) {
+    return formatTimestamp(ns);
+  }
+  const wallMs = anchor.wallMs + (ns - anchor.perfNs) / 1_000_000;
+  const date = new Date(wallMs);
+  if (Number.isNaN(date.valueOf())) {
+    return formatTimestamp(ns);
+  }
+  // 24시간 표기다. "오후 " 접두가 붙으면 144px label 컬럼에서 두 줄로 접히고,
+  // reference(10:23:10.123)도 12시간 표기를 쓰지 않는다.
+  return `${date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    second: "2-digit",
+  })}.${String(Math.floor(wallMs % 1000)).padStart(3, "0")}`;
 }
 
 function requestRows(
