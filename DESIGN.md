@@ -310,6 +310,9 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - **States**: loading, empty, sorted, filtered, selected, stale, error.
 - **Accessibility**: semantic table, sortable header state, keyboard row selection, filter label을 제공한다.
 - **Performance**: row가 100개를 넘을 때 virtualization을 적용한다. 전체 table 영역만 명명된 수평 scroll owner다.
+- **Page size**: 선택 가능한 값은 50과 100이다. 상한을 100으로 두어 위 virtualization
+  조건에 닿지 않게 한다. 200 이상을 다시 열려면 virtualization을 먼저 구현한다.
+- **Sort**: 정렬은 열 헤더(`aria-sort`)로만 조작한다. 별도 select를 두지 않는다.
 
 ### AnalyzerFinding
 
@@ -373,6 +376,11 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 | --- | --- | --- |
 | `--shadow-overlay` | `0 16px 48px rgb(0 0 0 / 0.35)` | drawer, modal |
 | `--shadow-tooltip` | `0 6px 20px rgb(0 0 0 / 0.28)` | tooltip |
+
+구현 편차: `--shadow-overlay` 대신 용도가 더 분명한 `--shadow-drawer`를 쓰고, 표에 없는
+`--shadow-panel`을 panel 기본 깊이로 추가했다. 이름만 바꾸는 변경은 이득이 없어 유지한다.
+`--z-*` 5개는 표대로 `tokens.css`에 있으며 CSS에 z-index 리터럴을 두지 않는다
+(`npm run check:tokens`가 막는다).
 | `--z-base` | `0` | page content |
 | `--z-sticky` | `20` | header, inspector |
 | `--z-nav` | `30` | compact navigation |
@@ -412,4 +420,5 @@ blur는 drawer backdrop에서 background dismissal을 설명할 때만 허용한
 | ID | Location | Severity | Affected users | Reason | Owner / Exit |
 | --- | --- | --- | --- | --- | --- |
 | DBT-1 | SourceViewer의 한국어 주석 줄 | Minor | 한국어 주석을 쓰는 프로젝트 | 번들한 JetBrains Mono는 `latin` subset이라 한글 글리프가 없다. 해당 줄만 Noto Sans KR로 폴백해 등폭이 깨지고 열이 어긋난다. 한글 등폭 폰트를 추가하면 번들이 MB 단위로 커진다. | `z` / 한글 등폭 요구가 실제로 제기되면 재검토 |
+| DBT-3 | Analyzer 목록의 열 헤더 | Minor | finding을 정렬해 보려는 사용자 | `FindingsQuery`에 sort 파라미터가 없다. 현재 페이지만 클라이언트에서 정렬하면 서버 pagination과 어긋나 사용자를 오해시키므로 정렬 헤더를 제공하지 않는다. `Table` 프리미티브는 `sort` prop을 optional로 받으므로 백엔드가 지원하면 바로 켜진다. | `m` / findings API에 sort 추가 시 종료 |
 | DBT-2 | 상태 배지·내비게이션·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` `⚙` 등 15종)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. | `z` / icon을 SVG로 전환할 때 종료 |

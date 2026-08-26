@@ -96,9 +96,10 @@ export function AppShell({
                 {bufferSource}
               </StatusBadge>
             ) : null}
+            {/* 헤더에서는 설명 줄을 두지 않는다. 토글 상태가 이미 보이고,
+                설명 한 줄이 좁은 폭 헤더 높이를 크게 늘린다. 안내는 Settings에 있다. */}
             <Switch
               checked={isLightTheme}
-              description="기본값은 어두운 화면입니다."
               label="밝은 화면"
               onCheckedChange={onThemeChange}
             />

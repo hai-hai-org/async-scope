@@ -159,10 +159,15 @@ function SegmentButton({
   segment: TimelineSegment;
   viewport: TimelineViewport;
 }) {
-  const style = {
-    insetInlineStart: `${segmentOffset(segment, viewport)}%`,
-    inlineSize: `${segmentWidth(segment, viewport)}%`,
-  };
+  const offset = segmentOffset(segment, viewport);
+  const width = segmentWidth(segment, viewport);
+  // 트랙 오른쪽 끝에 붙는 세그먼트는 CSS의 min-inline-size(18px, 클릭 가능한
+  // 최소 크기) 때문에 트랙을 넘어간다. 그런 경우엔 왼쪽이 아니라 오른쪽을
+  // 기준으로 배치해 안쪽으로 자라게 한다.
+  const anchoredRight = offset + width >= 99.5;
+  const style = anchoredRight
+    ? { insetInlineEnd: 0, inlineSize: `${Math.max(width, 100 - offset)}%` }
+    : { insetInlineStart: `${offset}%`, inlineSize: `${width}%` };
   return (
     <button
       aria-pressed={selected}

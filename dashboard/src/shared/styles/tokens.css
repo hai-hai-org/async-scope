@@ -97,6 +97,15 @@
 
   --shadow-panel: 0 18px 40px rgb(0 0 0 / 24%);
   --shadow-drawer: 0 24px 60px rgb(0 0 0 / 40%);
+  --shadow-tooltip: 0 6px 20px rgb(0 0 0 / 28%);
+
+  /* 층위 — DESIGN.md §7. 값을 코드에 흩뿌리면 sticky와 overlay가 서로
+   * 어긋난 순서로 쌓인다. 새 층이 필요하면 여기서 정한다. */
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-nav: 30;
+  --z-drawer: 50;
+  --z-tooltip: 60;
 }
 
 :root[data-theme="light"] {
@@ -135,4 +144,5 @@
 
   --shadow-panel: 0 18px 40px rgb(16 32 47 / 12%);
   --shadow-drawer: 0 24px 60px rgb(16 32 47 / 20%);
+  --shadow-tooltip: 0 6px 20px rgb(16 32 47 / 16%);
 }

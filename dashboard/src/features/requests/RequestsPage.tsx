@@ -17,13 +17,12 @@ import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { RequestsTable } from "./RequestsTable";
 import { DEFAULT_REQUESTS_QUERY, useRequests } from "./useRequests";
 
+// 정렬은 draft에 두지 않는다. 표 헤더가 query를 직접 바꾼다.
 type RequestsDraft = {
   method: string;
-  order: RequestOrder;
   page_size: number;
   path: string;
   q: string;
-  sort: RequestSort;
   status: "" | RequestStatus;
 };
 
@@ -70,15 +69,19 @@ export function RequestsPage() {
 
   const applyFilters = () => {
     setQuery({
-      order: draft.order,
+      order: query.order,
       page: 1,
       page_size: draft.page_size,
-      sort: draft.sort,
+      sort: query.sort,
       ...(draft.q ? { q: draft.q } : {}),
       ...(draft.status ? { status: draft.status } : {}),
       ...(draft.method ? { method: draft.method.toUpperCase() } : {}),
       ...(draft.path ? { path: draft.path } : {}),
     });
+  };
+  const applySort = (sort: RequestSort, order: RequestOrder) => {
+    // 정렬을 바꾸면 첫 페이지부터 다시 본다.
+    setQuery({ ...query, order, page: 1, sort });
   };
   const selectRequest = (requestId: string) => {
     setSelectedRequestId(requestId);
@@ -109,6 +112,7 @@ export function RequestsPage() {
           />
           <RequestsListBody
             onSelect={selectRequest}
+            onSort={applySort}
             query={query}
             requests={requests}
             selectedRequestId={selectedRequestId}
@@ -216,32 +220,6 @@ function RequestsFilters({
         />
       </label>
       <label>
-        <span>정렬 기준</span>
-        <select
-          onChange={(event) =>
-            onChange({ ...draft, sort: event.target.value as RequestSort })
-          }
-          value={draft.sort}
-        >
-          <option value="started_at_ns">시작 시각</option>
-          <option value="duration_ns">소요 시간</option>
-          <option value="status">상태</option>
-          <option value="path">경로</option>
-        </select>
-      </label>
-      <label>
-        <span>정렬 순서</span>
-        <select
-          onChange={(event) =>
-            onChange({ ...draft, order: event.target.value as RequestOrder })
-          }
-          value={draft.order}
-        >
-          <option value="desc">내림차순</option>
-          <option value="asc">오름차순</option>
-        </select>
-      </label>
-      <label>
         <span>표시 개수</span>
         <select
           onChange={(event) =>
@@ -251,7 +229,6 @@ function RequestsFilters({
         >
           <option value={50}>50</option>
           <option value={100}>100</option>
-          <option value={200}>200</option>
         </select>
       </label>
       <Button size="sm" type="submit" variant="primary">
@@ -263,12 +240,14 @@ function RequestsFilters({
 
 function RequestsListBody({
   onSelect,
+  onSort,
   query,
   requests,
   selectedRequestId,
   setQuery,
 }: {
   onSelect: (requestId: string) => void;
+  onSort: (sort: RequestSort, order: RequestOrder) => void;
   query: RequestsQuery;
   requests: ReturnType<typeof useRequests>;
   selectedRequestId: string | null;
@@ -303,8 +282,11 @@ function RequestsListBody({
       ) : (
         <RequestsTable
           onSelect={onSelect}
+          onSort={onSort}
+          order={query.order}
           requests={requests.state.data.items}
           selectedRequestId={selectedRequestId}
+          sort={query.sort}
         />
       )}
       <PaginationControls
@@ -363,11 +345,9 @@ function PaginationControls({
 function draftFromQuery(query: RequestsQuery): RequestsDraft {
   return {
     method: query.method ?? "",
-    order: query.order,
     page_size: query.page_size,
     path: query.path ?? "",
     q: query.q ?? "",
-    sort: query.sort,
     status: query.status ?? "",
   };
 }
