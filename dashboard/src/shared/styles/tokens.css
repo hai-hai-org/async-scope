@@ -5,17 +5,69 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas,
     monospace;
 
-  --surface-canvas: #04111b;
-  --surface-sidebar: #061522;
-  --surface-panel: #091b28;
-  --surface-raised: #0d2231;
-  --surface-hover: #112c3f;
+  /* Typography scale — DESIGN.md §3.
+   * font 단축 속성으로 묶어 두면 사용처에서 크기와 굵기·행간이 따로 흐트러지지
+   * 않는다. letter-spacing은 단축 속성에 포함되지 않으므로 별도 토큰이다.
+   * weight는 실제로 번들된 400/500/600/700만 쓴다. */
+  /* rem이다. px를 박으면 브라우저의 기본 글꼴 크기 설정과 텍스트 전용 확대에
+   * 화면이 반응하지 않는다 (WCAG 1.4.4). 값은 16px 기준이며 기본 설정에서
+   * 지금과 동일하다: 0.875rem = 14px. */
+  --text-display: 700 1.75rem / 1.25 var(--font-ui);
+  --text-h1: 700 1.25rem / 1.35 var(--font-ui);
+  --text-h2: 600 1rem / 1.4 var(--font-ui);
+  --text-h3: 600 0.875rem / 1.45 var(--font-ui);
+  --text-body: 400 0.875rem / 1.55 var(--font-ui);
+  --text-body-sm: 400 0.8125rem / 1.5 var(--font-ui);
+  --text-caption: 500 0.75rem / 1.45 var(--font-ui);
+  --text-metric: 600 1.375rem / 1.2 var(--font-mono);
+  --text-code: 400 0.8125rem / 1.6 var(--font-mono);
+  /* 디자인 레벨이 아니라 플랫폼 제약이다. iOS Safari는 16px 미만 폼 컨트롤에
+   * 포커스하면 페이지를 확대한다 (DESIGN.md §3의 "모바일 form control 16px 이상"). */
+  --text-form-touch: 400 1rem / 1.5 var(--font-ui);
+
+  /* 단축 속성은 크기와 굵기를 함께 정하므로, 같은 크기에서 굵기만 올려야 하는
+   * 경우(버튼, 표 머리, 배지)를 위해 weight를 따로 노출한다. 번들된 값만 쓴다. */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-display: -0.02em;
+  --tracking-h1: -0.01em;
+  --tracking-h2: -0.005em;
+  --tracking-caption: 0.01em;
+
+  /* Motion — DESIGN.md §6. transform·opacity·color 계열에만 쓴다. */
+  --motion-instant: 0ms;
+  --motion-micro: 120ms;
+  --motion-standard: 180ms;
+  --ease-micro: ease-out;
+  --ease-standard: ease-in-out;
+
+  /* 표면 사다리 — DESIGN.md §7. 척도는 대비비가 아니라 CIELAB ΔL*다.
+   * 어두운 색에서 WCAG ratio는 +0.05 항에 지배되어 지각 분리를 나타내지 못한다
+   * (이전 사다리는 전 구간 1.03~1.13:1이었고 canvas→panel이 ΔL* +2.7로 보이지 않았다).
+   * 그래서 border가 유일한 구분 수단이 되어 모든 상자에 테두리가 생겼다.
+   * H=205 네이비를 유지하며 단계만 벌린다. 목표: canvas→panel ≥5, panel→raised ≥4. */
+  --surface-sidebar: #040a0e; /* L*  2.5  recessed — nav가 콘텐츠 뒤에 앉는다 */
+  --surface-canvas: #071017; /* L*  4.3  +1.8 */
+  --surface-panel: #0d1e2b; /* L* 10.5  +6.2  카드가 배경에서 떨어지는 핵심 단계 */
+  --surface-raised: #11283a; /* L* 15.2  +4.7  중첩 표면: 입력, 코드, 릴 */
+  --surface-hover: #15344a; /* L* 20.5  +5.3  상태 */
   --text-primary: #f4f8fb;
   --text-secondary: #b7c4ce;
-  --text-tertiary: #8394a1;
+  /* 표면 사다리를 벌리면서 raised·hover와 선택 행 틴트가 밝아져 P4의 #8394a1이
+   * 4.14:1로 미달했다. 다섯 배경(canvas·panel·raised·hover·선택행) 최악에서
+   * 4.80:1이 되는 값이다 (WCAG 1.4.3). */
+  --text-tertiary: #8ea0ad;
   --border-subtle: #142b3a;
   --border-default: #1c3445;
   --border-strong: #2a4a60;
+  /* 폼 컨트롤 경계 전용. WCAG 1.4.11이 UI 컴포넌트 경계에 3:1을 요구하는데
+   * --border-strong은 어떤 표면에서도 2.13:1을 넘지 못한다 — hairline은 어두운
+   * 색끼리의 대비이므로 표면 사다리와 같은 이유로 압축된다.
+   * 컨트롤이 놓이는 네 표면 최악에서 3.72:1이다. 장식용 경계에는 쓰지 않는다. */
+  --border-control: #5a8fb5;
   --accent-primary: #2f80ed;
   --accent-hover: #5a9bff;
   --focus-ring: #8bc1ff;
@@ -52,28 +104,47 @@
   --control-md: 40px;
   --control-touch: 44px;
   --sidebar-wide: 192px;
-  --sidebar-compact: 72px;
+  /* 아이콘 rail이 아니라 좁은 텍스트 라벨 목록이다 — "Analyzer" 같은 라벨이
+   * 줄바꿈 없이 들어가는 최소 폭. */
+  --sidebar-compact: 160px;
   --detail-wide: 388px;
+  /* DESIGN.md §4 Timeline geometry: wide 144px, compact 120px. */
+  --timeline-label-col: 144px;
   --header-height: 60px;
   --footer-height: 44px;
 
-  --shadow-panel: 0 18px 40px rgb(0 0 0 / 24%);
-  --shadow-drawer: 0 24px 60px rgb(0 0 0 / 40%);
+  /* shadow는 tooltip 같은 overlay에만 쓴다 (DESIGN.md §7).
+   * panel용 그림자를 두면 모든 카드가 떠 보인다 — 깊이는 표면 톤이 만든다. */
+  --shadow-tooltip: 0 6px 20px rgb(0 0 0 / 28%);
+
+  /* 층위 — DESIGN.md §7. 값을 코드에 흩뿌리면 sticky와 overlay가 서로
+   * 어긋난 순서로 쌓인다. 새 층이 필요하면 여기서 정한다. */
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-nav: 30;
+  --z-tooltip: 60;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --surface-canvas: #f2f6f9;
-  --surface-sidebar: #ffffff;
-  --surface-panel: #ffffff;
-  --surface-raised: #f8fafc;
-  --surface-hover: #eaf1f6;
+  /* light는 흰색에 압축되어 dark와 같은 폭을 낼 수 없다. nested는 반대로
+   * panel 아래로 들어간다(recessed). */
+  --surface-sidebar: #d6e1e9; /* L* 88.9 */
+  --surface-canvas: #e3eaf0; /* L* 92.3  +3.4 */
+  --surface-panel: #ffffff; /* L*100.0  +7.7 */
+  --surface-raised: #eef2f6; /* L* 95.3  -4.7  panel 아래 */
+  --surface-hover: #e4ecf1; /* L* 92.9 */
   --text-primary: #10202f;
   --text-secondary: #4c6174;
-  --text-tertiary: #6f8190;
+  /* 축 라벨·보조 설명·행 시각이 모두 이 토큰을 쓴다. 표면 사다리를 벌리면서
+   * canvas가 어두워져 P4의 #5f7180이 sidebar에서 3.80:1로 다시 미달했다.
+   * 다섯 표면 중 가장 어두운 sidebar에서도 4.61:1이 되는 값이다 (WCAG 1.4.3). */
+  --text-tertiary: #54646f;
   --border-subtle: #e3eaf0;
   --border-default: #cfdae3;
   --border-strong: #aebfcc;
+  /* 네 표면 최악(canvas) 3.04:1. */
+  --border-control: #70889d;
   --accent-primary: #1b66d1;
   --accent-hover: #1454b2;
   --focus-ring: #0b57d0;
@@ -95,6 +166,5 @@
   --state-idle-bg: #e6ebef;
   --state-idle-fg: #445460;
 
-  --shadow-panel: 0 18px 40px rgb(16 32 47 / 12%);
-  --shadow-drawer: 0 24px 60px rgb(16 32 47 / 20%);
+  --shadow-tooltip: 0 6px 20px rgb(16 32 47 / 16%);
 }

@@ -5,13 +5,18 @@
   gap: var(--space-2);
   min-block-size: var(--control-md);
   padding: 0 var(--space-4);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   text-decoration: none;
   cursor: pointer;
+  transition:
+    background-color var(--motion-micro) var(--ease-micro),
+    border-color var(--motion-micro) var(--ease-micro),
+    color var(--motion-micro) var(--ease-micro),
+    transform var(--motion-micro) var(--ease-micro);
 }
 
 .button:hover,
@@ -54,18 +59,26 @@
 }
 
 .button--danger {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
+  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-strong));
   color: var(--status-error);
 }
 
 .button--sm {
   min-block-size: var(--control-sm);
   padding-inline: var(--space-3);
-  font-size: 13px;
+  font: var(--text-body-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .button--touch {
   min-block-size: var(--control-touch);
+}
+
+/* icon만 담는 정사각형 button. 기본 .button은 텍스트 라벨 폭에 맞춰 좌우
+ * padding을 쓰므로 아이콘 하나만 넣으면 가운데가 아니라 넓적한 상자가 된다. */
+.button--icon {
+  inline-size: var(--control-sm);
+  padding-inline: 0;
 }
 
 .button__spinner {
@@ -91,10 +104,8 @@
 
 .panel {
   min-inline-size: 0;
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .panel__header {
@@ -116,14 +127,14 @@
 
 .panel__title {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.4;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .panel__description {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font: var(--text-body-sm);
 }
 
 .panel__body {
@@ -140,24 +151,22 @@
 .metric-card {
   display: grid;
   gap: var(--space-3);
-  min-block-size: 142px;
+  min-block-size: 112px;
   padding: var(--space-4);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
-.metric-card--success {
-  border-color: color-mix(in srgb, var(--status-success) 45%, var(--border-default));
+.metric-card--success .metric-card__value {
+  color: var(--status-success);
 }
 
-.metric-card--warning {
-  border-color: color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
+.metric-card--warning .metric-card__value {
+  color: var(--status-warning);
 }
 
-.metric-card--error {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
+.metric-card--error .metric-card__value {
+  color: var(--status-error);
 }
 
 .metric-card[data-state="unavailable"] {
@@ -169,7 +178,8 @@
   justify-content: space-between;
   gap: var(--space-3);
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .metric-card__state {
@@ -183,18 +193,20 @@
   gap: var(--space-2);
   min-block-size: 32px;
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 22px;
+  font: var(--text-metric);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  transition: opacity var(--motion-micro) var(--ease-micro);
+}
+
+.metric-card[data-state="stale"] .metric-card__value,
+.metric-card[data-state="loading"] .metric-card__value {
+  opacity: 0.6;
 }
 
 .metric-card__unit,
 .metric-card p {
   color: var(--text-tertiary);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 400;
+  font: var(--text-body-sm);
 }
 
 .metric-card p {
@@ -251,7 +263,7 @@
 }
 
 .switch-label__title {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .switch-root {
@@ -259,10 +271,13 @@
   flex: 0 0 auto;
   inline-size: 46px;
   block-size: 26px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: 999px;
   background: var(--surface-raised);
   cursor: pointer;
+  transition:
+    background-color var(--motion-micro) var(--ease-micro),
+    border-color var(--motion-micro) var(--ease-micro);
 }
 
 .switch-root[data-state="checked"] {
@@ -275,19 +290,26 @@
   opacity: 0.55;
 }
 
+/* Radix Thumb은 위치 스타일을 주지 않는다 — position:relative인 root 안에서
+ * static 흐름대로 놓이면 상단에 붙어 어중간해 보인다. block-start:50% +
+ * translateY(-50%)로 root의 실제 높이와 무관하게 수직 중앙에 고정하고,
+ * inline-start:0 + translateX로 트랙 안쪽 여백을 좌우 동일하게(3px) 맞춘다. */
 .switch-thumb {
-  display: block;
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0;
   inline-size: 20px;
   block-size: 20px;
   border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
-  transform: translateX(2px);
-  transition: transform 120ms ease;
+  transform: translate(3px, -50%);
+  transition: transform var(--motion-micro) var(--ease-micro);
 }
 
 .switch-thumb[data-state="checked"] {
-  transform: translateX(20px);
+  /* 트랙 content-box 44px − thumb 20px − 여백 3px */
+  transform: translate(21px, -50%);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -296,86 +318,128 @@
   }
 }
 
-.drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  background: rgb(0 0 0 / 50%);
+/* P2에서 만든 --shadow-tooltip / --z-tooltip의 첫 소비처다. */
+.tooltip {
+  z-index: var(--z-tooltip);
+  max-inline-size: 22rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-tooltip);
+  color: var(--text-primary);
+  font: var(--text-body-sm);
+  word-break: keep-all;
+  animation: tooltip-in var(--motion-micro) var(--ease-micro);
 }
 
-.drawer-content {
-  position: fixed;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: 31;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  inline-size: min(92vw, var(--detail-wide));
-  border-inline-start: 1px solid var(--border-default);
-  background: var(--surface-panel);
-  box-shadow: var(--shadow-drawer);
+.tooltip__arrow {
+  fill: var(--surface-raised);
 }
 
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border-block-end: 1px solid var(--border-subtle);
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
 }
 
-.drawer-title {
-  margin: 0;
-  font-size: 18px;
-}
-
-.drawer-description {
-  margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
-}
-
-.drawer-body {
-  min-block-size: 0;
-  overflow: auto;
-  padding: var(--space-5);
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    animation: none;
+  }
 }
 
 .table-wrap {
   min-inline-size: 0;
   overflow-x: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
 }
 
 .table {
   inline-size: 100%;
-  min-inline-size: 640px;
+  /* 고정 열 폭 합(약 640px) + 주 열의 읽을 수 있는 최소 폭을 더한 값이다.
+   * 이보다 작으면 주 열이 짜부러진다. 부족한 폭은 .table-wrap이 스크롤한다
+   * (DESIGN.md: "전체 table 영역만 명명된 수평 scroll owner다"). */
+  min-inline-size: 880px;
+  /* auto layout이면 데이터가 갱신될 때마다 열 경계가 흔들린다.
+   * 열 폭은 colgroup이 정하고 내용은 그 안에서 잘린다. */
+  table-layout: fixed;
   border-collapse: collapse;
   background: var(--surface-panel);
 }
 
-.table caption {
-  padding: var(--space-3) var(--space-4);
-  color: var(--text-secondary);
-  text-align: start;
-}
-
 .table th,
 .table td {
-  max-inline-size: 32rem;
   padding: var(--space-3) var(--space-4);
   border-block-start: 1px solid var(--border-subtle);
-  overflow-wrap: anywhere;
+  /* overflow-wrap: anywhere는 "52ms"를 "52m"/"s"로 쪼갠다.
+   * 긴 값은 .truncate(ellipsis)로 처리한다. */
+  overflow: hidden;
   text-align: start;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky);
+  background: var(--surface-panel);
   color: var(--text-tertiary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.table__cell--numeric {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th.table__cell--numeric {
+  font-family: var(--font-ui);
+}
+
+.table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition: color var(--motion-micro) var(--ease-micro);
+}
+
+.table__sort:hover {
+  color: var(--text-primary);
+}
+
+.table__sort:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.table__cell--numeric .table__sort {
+  flex-direction: row-reverse;
+}
+
+.table__sort-arrow {
+  color: var(--text-tertiary);
+}
+
+[aria-sort="ascending"] .table__sort-arrow,
+[aria-sort="descending"] .table__sort-arrow {
+  color: var(--accent-hover);
+}
+
+.table tbody tr {
+  transition: background-color var(--motion-micro) var(--ease-micro);
 }
 
 .table tbody tr:hover {
@@ -399,10 +463,12 @@
   max-inline-size: 100%;
   min-block-size: 24px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 650;
+  /* 표면과 무관하게 얹히도록 틴트를 합성한다 — 배지는 canvas·panel·raised에 모두 놓인다. */
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .badge span:last-child {
@@ -412,31 +478,38 @@
   white-space: nowrap;
 }
 
+/* 틴트 위의 텍스트는 순수 status 색으로는 4.5:1을 넘지 못한다 (실측 dark error
+ * 3.81, light success 3.51). --text-primary를 28% 섞으면 dark에서는 밝은 쪽으로,
+ * light에서는 어두운 쪽으로 움직여 양쪽 테마가 한 번에 올라간다.
+ * 다섯 배경(canvas·panel·raised·hover·선택행) 최악 dark 4.93 / light 4.89. */
 .badge--observed {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--status-info) 55%, var(--border-default));
-  color: var(--status-info);
+  background: color-mix(in srgb, var(--status-info) 14%, transparent);
+  color: color-mix(in srgb, var(--status-info) 72%, var(--text-primary));
 }
 
+/* 점선은 evidence 신호 전용이다 (DESIGN.md §5). 나머지 배지에서 윤곽선을 걷어낸
+ * 이유가 이것이다 — 전부 테두리를 두르면 이 점선이 신호로 읽히지 않는다.
+ * 신호이므로 경계 자체가 3:1을 넘어야 한다 (light에서 2.75:1이었다). */
 .badge--inferred {
   border-style: dashed;
-  border-color: color-mix(in srgb, var(--status-warning) 70%, var(--border-default));
-  color: var(--status-warning);
+  border-color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--status-warning) 72%, var(--text-primary));
 }
 
 .badge--error {
-  border-color: color-mix(in srgb, var(--status-error) 70%, var(--border-default));
-  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 14%, transparent);
+  color: color-mix(in srgb, var(--status-error) 72%, var(--text-primary));
 }
 
 .badge--success {
-  border-color: color-mix(in srgb, var(--status-success) 70%, var(--border-default));
-  color: var(--status-success);
+  background: color-mix(in srgb, var(--status-success) 14%, transparent);
+  color: color-mix(in srgb, var(--status-success) 72%, var(--text-primary));
 }
 
 .badge--warning {
-  border-color: color-mix(in srgb, var(--status-warning) 70%, var(--border-default));
-  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--status-warning) 72%, var(--text-primary));
 }
 
 .empty-state {
@@ -444,7 +517,6 @@
   justify-items: start;
   gap: var(--space-3);
   padding: var(--space-5);
-  border: 1px dashed var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -454,8 +526,8 @@
   place-items: center;
   inline-size: 36px;
   block-size: 36px;
-  border: 1px solid var(--border-default);
   border-radius: 999px;
+  background: var(--surface-panel);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
 }
@@ -478,11 +550,30 @@
   margin-block-end: var(--space-4);
 }
 
+/* 재생 제어 / 줌 / 이동, 성격이 다른 세 그룹을 divider로 나눈다.
+ * 장식용 box가 아니라 표 divider와 같은 역할의 선이다(DESIGN.md §7 (d)). */
+.timeline-toolbar__group + .timeline-toolbar__group {
+  border-inline-start: 1px solid var(--border-subtle);
+  padding-inline-start: var(--space-4);
+}
+
+/* −/구간/+처럼 한 컨트롤을 이루는 조각들을 하나의 표면으로 묶는다.
+ * border가 아니라 표면 톤으로 구분한다(DESIGN.md §7). */
+.timeline-toolbar__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
 .timeline-toolbar__window {
-  min-inline-size: 132px;
+  min-inline-size: 104px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   text-align: center;
+  white-space: nowrap;
 }
 
 .timeline-alert {
@@ -491,7 +582,6 @@
   gap: var(--space-3);
   margin-block-end: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-error) 55%, var(--border-default));
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--status-error) 12%, transparent);
   color: var(--text-secondary);
@@ -499,6 +589,90 @@
 
 .timeline-alert strong {
   color: var(--status-error);
+}
+
+/* 이 제품이 설명하려는 순간이다. 눈에 띄되 focus를 빼앗지 않는다. */
+.blocking-alert {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--status-error) 45%, var(--border-default));
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--status-error) 8%, var(--surface-panel));
+}
+
+.blocking-alert__head {
+  display: flex;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.blocking-alert__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--status-error) 22%, transparent);
+  color: var(--status-error);
+  font-weight: var(--weight-bold);
+}
+
+.blocking-alert__heading {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.blocking-alert__title {
+  margin: 0;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
+  word-break: keep-all;
+}
+
+.blocking-alert__meta {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font: var(--text-body-sm);
+}
+
+.blocking-alert__inferred {
+  display: flex;
+  align-items: start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font: var(--text-body-sm);
+  word-break: keep-all;
+}
+
+.blocking-alert__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.blocking-alert__facts div {
+  min-inline-size: 0;
+}
+
+.blocking-alert__facts dt {
+  color: var(--text-tertiary);
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
+}
+
+.blocking-alert__facts dd {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+  font: var(--text-code);
+}
+
+.blocking-alert__fix h4 {
+  margin: 0 0 var(--space-2);
+  font: var(--text-h3);
 }
 
 .timeline-region {
@@ -509,39 +683,56 @@
 .timeline-reel {
   min-inline-size: 0;
   overflow-x: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
 
 .timeline-axis,
 .timeline-rows {
-  min-inline-size: 760px;
+  min-inline-size: 720px;
 }
 
 .timeline-axis {
   position: relative;
-  block-size: 56px;
+  block-size: 36px;
   border-block-end: 1px solid var(--border-subtle);
 }
 
 .timeline-axis__labels,
 .timeline-axis__line {
   position: absolute;
-  inset-inline: 160px var(--space-4);
+  inset-inline: var(--timeline-label-col) var(--space-4);
 }
 
 .timeline-axis__labels {
-  inset-block-start: var(--space-2);
+  inset-block-start: var(--space-1);
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
+  /* text-code의 line-height(1.6)는 여러 줄 코드용이다. 여기선 한 줄짜리
+   * 숫자라 그대로 쓰면 글자 아래쪽이 바로 밑 눈금(.timeline-axis__line
+   * span)과 같은 높이에 걸쳐 실측 6.8px 겹친다 — 눈금이 숫자 아랫부분을
+   * 가로질러 잘린 것처럼 보인다. 한 줄 라벨에 맞게 줄간격을 좁힌다. */
+  line-height: 1;
 }
 
 .timeline-axis__labels span,
 .timeline-axis__line span {
   position: absolute;
   transform: translateX(-50%);
+}
+
+/* 첫 라벨은 왼쪽 라벨 거터를, 마지막 라벨은 릴 오른쪽 경계를 넘는다. */
+.timeline-axis__labels span:first-child {
+  transform: translateX(0);
+}
+
+/* 마지막 눈금은 axisEndNs("지금")과 같은 위치라 playhead 점(10px 지름)이
+ * 바로 그 자리에 온다. 오른쪽 정렬만 하면 라벨 끝자리 숫자가 점에 가려진다
+ * (실측: "10993.18s"의 "8s"가 파란 점에 덮임). playhead 반경만큼 왼쪽으로
+ * 더 띄운다. */
+.timeline-axis__labels span:last-child {
+  transform: translateX(calc(-100% - var(--space-3)));
 }
 
 .timeline-axis__line {
@@ -559,25 +750,59 @@
 .timeline-axis__line .timeline-playhead,
 .timeline-row__playhead {
   position: absolute;
-  z-index: 2;
+  /* 트랙 안의 국소 층위다. playhead는 segment 위에 있어야 한다. */
+  z-index: calc(var(--z-base) + 2);
   inline-size: 2px;
   background: var(--accent-primary);
   transform: translateX(-50%);
 }
 
+/* DESIGN.md §4: 1px 실선 + 10px handle, keyboard focus 가능. */
 .timeline-axis__line .timeline-playhead {
-  block-size: 28px;
-  inset-block-start: -14px;
+  inline-size: 1px;
+  block-size: 24px;
+  inset-block-start: -12px;
+  cursor: ew-resize;
 }
 
+.timeline-axis__line .timeline-playhead::after {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-start: -5px;
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  content: "";
+}
+
+.timeline-axis__line .timeline-playhead:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* 요청이 쌓일수록 무한정 늘어나던 것을 6행(행 최소높이 68px × 6, DESIGN.md
+ * Timeline geometry)에서 자체 스크롤로 봉쇄한다. .timeline-reel이 아니라
+ * 여기 거는 이유: .timeline-reel에 걸면 축 헤더까지 같이 스크롤되어 사라진다. */
 .timeline-rows {
   display: grid;
+  max-block-size: 408px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.timeline-rows-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .timeline-row {
   display: grid;
-  grid-template-columns: 160px minmax(560px, 1fr);
-  min-block-size: 76px;
+  grid-template-columns: var(--timeline-label-col) minmax(480px, 1fr) 72px;
+  align-items: center;
+  min-block-size: 68px;
   border-block-end: 1px solid var(--border-subtle);
 }
 
@@ -588,21 +813,51 @@
 .timeline-row__label {
   display: grid;
   align-content: center;
-  gap: var(--space-1);
+  /* 두 줄(시작 시각 / METHOD·경로)이 68px row 안에 들어와야 한다.
+   * padding을 space-3으로 두면 행이 92px까지 늘어난다. */
+  gap: 2px;
   min-inline-size: 0;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-inline-end: 1px solid var(--border-subtle);
 }
 
-.timeline-row__label span {
+.timeline-row__start {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-code);
+}
+
+.timeline-row__request {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.timeline-row__method {
+  flex: 0 0 auto;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
+}
+
+.timeline-row__total {
+  padding-inline-end: var(--space-3);
+  color: var(--text-secondary);
+  font: var(--text-code);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
 }
 
 .timeline-row__track {
   position: relative;
-  min-block-size: 76px;
+  min-block-size: 68px;
   margin-inline: 0 var(--space-4);
+  /* segment의 min-inline-size(18px)가 트랙 끝을 넘어간다.
+   * 릴 전체의 수평 스크롤은 .timeline-reel이 그대로 소유한다. */
+  overflow: hidden;
 }
 
 .timeline-row__track::before {
@@ -619,23 +874,46 @@
   pointer-events: none;
 }
 
+/* DESIGN.md §5: 44px hit area를 transparent padding으로 확보한다.
+ * 버튼 자체가 44px이고, 눈에 보이는 32px 바는 ::before가 그린다.
+ * (overflow: hidden이 있으면 ::before로 영역을 넓혀도 잘려서 무효다.) */
 .timeline-segment {
   position: absolute;
-  inset-block-start: 22px;
+  inset-block-start: 12px;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   min-inline-size: 18px;
   max-inline-size: 100%;
-  block-size: 32px;
+  block-size: 44px;
   padding: 0 var(--space-2);
   overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  font-size: 12px;
-  font-weight: 650;
+  border: 0;
+  background: transparent;
+  color: var(--segment-fg);
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
   text-align: start;
   cursor: pointer;
+  transition:
+    opacity var(--motion-standard) var(--ease-standard),
+    outline-color var(--motion-standard) var(--ease-standard);
+}
+
+.timeline-segment::before {
+  position: absolute;
+  inset: 6px 0;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--segment-bg);
+  content: "";
+}
+
+.timeline-segment__duration {
+  flex: 0 0 auto;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
 }
 
 .timeline-segment[aria-pressed="true"] {
@@ -643,8 +921,9 @@
   outline-offset: 2px;
 }
 
-.timeline-segment.is-inferred {
+.timeline-segment.is-inferred::before {
   border-style: dashed;
+  border-color: currentColor;
 }
 
 .timeline-segment.is-truncated {
@@ -652,33 +931,33 @@
 }
 
 .timeline-segment--running {
-  background: var(--state-running-bg);
-  color: var(--state-running-fg);
+  --segment-bg: var(--state-running-bg);
+  --segment-fg: var(--state-running-fg);
 }
 
 .timeline-segment--waiting {
-  background: var(--state-waiting-bg);
-  color: var(--state-waiting-fg);
+  --segment-bg: var(--state-waiting-bg);
+  --segment-fg: var(--state-waiting-fg);
 }
 
 .timeline-segment--blocking {
-  background: var(--state-blocking-bg);
-  color: var(--state-blocking-fg);
+  --segment-bg: var(--state-blocking-bg);
+  --segment-fg: var(--state-blocking-fg);
 }
 
 .timeline-segment--response {
-  background: var(--state-response-bg);
-  color: var(--state-response-fg);
+  --segment-bg: var(--state-response-bg);
+  --segment-fg: var(--state-response-fg);
 }
 
 .timeline-segment--task {
-  background: var(--state-thread-bg);
-  color: var(--state-thread-fg);
+  --segment-bg: var(--state-thread-bg);
+  --segment-fg: var(--state-thread-fg);
 }
 
 .timeline-segment--truncated {
-  background: var(--state-idle-bg);
-  color: var(--state-idle-fg);
+  --segment-bg: var(--state-idle-bg);
+  --segment-fg: var(--state-idle-fg);
 }
 
 .timeline-empty {
@@ -689,10 +968,15 @@
   color: var(--text-secondary);
 }
 
+/* 세로로 6줄 나열되던 걸 한 줄(좁으면 랩)로 바꿨다 — badge 이름만으로도
+ * 상태는 이미 구분되고, 긴 설명은 hover/focus 시 tooltip으로만 보인다
+ * (badge에 focusable을 켜서 키보드로도 닿는다). 위 플롯과 붙어 있던 것도
+ * 분리한다. */
 .legend-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
+  margin-block-start: var(--space-5);
 }
 
 .requests-page {
@@ -707,12 +991,24 @@
   align-items: start;
 }
 
-.requests-filters {
+/* auto-fit은 컨테이너 폭에 맞춰 열 수를 줄인다. 고정 최솟값을 쓰면
+ * 트랙이 그 아래로 줄지 않아 패널을 뚫고 나간다. */
+.requests-filters,
+.findings-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) repeat(6, minmax(110px, 1fr)) auto;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-3);
   align-items: end;
   margin-block-end: var(--space-4);
+}
+
+.requests-filters > label:first-child {
+  grid-column: span 2;
+}
+
+.requests-filters > .button,
+.findings-filters > .button {
+  justify-self: end;
 }
 
 .requests-filters label {
@@ -720,8 +1016,8 @@
   gap: var(--space-1);
   min-inline-size: 0;
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .requests-filters input,
@@ -729,7 +1025,7 @@
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -767,10 +1063,6 @@
   cursor: pointer;
 }
 
-.requests-table__select strong {
-  max-inline-size: 280px;
-}
-
 .requests-table__select .truncate {
   max-inline-size: 280px;
 }
@@ -779,8 +1071,7 @@
 .request-detail__meta span,
 .source-viewer code::before {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
 }
 
 .pagination-controls {
@@ -793,15 +1084,42 @@
 }
 
 .pagination-controls span {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
 }
 
-.requests-detail-compact {
-  display: none;
+/* DESIGN.md §4: detail inspector는 viewport 안에서 sticky이며 내부가 길 때
+ * inspector body만 스크롤한다. 스크롤 조상은 .main(overflow: auto)이다.
+ * Requests와 Timeline이 같은 규칙을 쓴다. */
+.detail-aside {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky);
+  min-inline-size: 0;
+  max-block-size: calc(100dvh - var(--header-height) - var(--space-10));
+  overflow: auto;
+}
+
+/* DESIGN.md §4 wide: Timeline page는 main/inspector grid다.
+ *
+ * 스펙은 main을 minmax(680px, 1fr)로 적었지만 그러면 1280px에서 넘친다:
+ * 680 + 388(inspector) + 20(gap) + 192(sidebar) + 48(main padding) = 1328px.
+ * 1280px도 스펙이 규정한 반응형 기준이므로 고정 최솟값을 두지 않는다.
+ * plot은 .timeline-reel이 수평 스크롤을 소유하므로 열이 줄어도 읽을 수 있다. */
+.timeline-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--detail-wide);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.timeline-main {
+  display: grid;
+  gap: var(--space-4);
+  min-inline-size: 0;
 }
 
 .request-detail {
+  container: request-detail / inline-size;
   display: grid;
   gap: var(--space-5);
 }
@@ -815,8 +1133,8 @@
 
 .request-detail__header h4 {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.35;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .request-detail__meta {
@@ -825,11 +1143,19 @@
   gap: var(--space-2);
 }
 
+/* 같은 컴포넌트가 388px 인스펙터와 Analyzer의 넓은 열에 모두 들어간다.
+ * 뷰포트가 아니라 자신이 놓인 폭으로 판단해야 한다. */
 .request-detail__flow-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
+}
+
+@container request-detail (min-width: 620px) {
+  .request-detail__flow-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  }
 }
 
 .request-detail__section {
@@ -845,14 +1171,14 @@
 
 .request-detail__section-header h5 {
   margin: 0;
-  font-size: 14px;
+  font: var(--text-h3);
 }
 
 .request-detail__section-header p,
 .request-detail__section-header span {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-caption);
 }
 
 .execution-flow,
@@ -880,7 +1206,7 @@
   gap: var(--space-2);
   inline-size: 100%;
   padding: var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -893,8 +1219,11 @@
   background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-raised));
 }
 
+.execution-flow__button {
+  transition: background-color var(--motion-standard) var(--ease-standard);
+}
+
 .execution-flow__button:hover {
-  border-color: var(--border-strong);
   background: var(--surface-hover);
 }
 
@@ -915,22 +1244,20 @@
 
 .execution-flow__meta {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-caption);
 }
 
 .execution-flow-empty {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border: 1px dashed var(--border-default);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-secondary);
 }
 
 .execution-flow-empty span {
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 .source-viewer {
@@ -938,13 +1265,11 @@
   max-block-size: 420px;
   margin: 0;
   overflow: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
+  font: var(--text-code);
 }
 
 .source-viewer code {
@@ -978,28 +1303,22 @@
   align-items: start;
 }
 
-.findings-filters {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(110px, 1fr)) auto;
-  gap: var(--space-3);
-  align-items: end;
-  margin-block-end: var(--space-4);
-}
+
 
 .findings-filters label {
   display: grid;
   gap: var(--space-1);
   min-inline-size: 0;
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .findings-filters select {
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -1042,6 +1361,7 @@
 }
 
 .finding-detail {
+  container: finding-detail / inline-size;
   display: grid;
   gap: var(--space-5);
 }
@@ -1055,17 +1375,16 @@
 
 .finding-detail__header h4 {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.35;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .finding-notice {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-raised));
   color: var(--text-secondary);
 }
 
@@ -1080,7 +1399,6 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -1088,7 +1406,7 @@
 .finding-feedback p {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 .finding-feedback__error {
@@ -1098,9 +1416,17 @@
 
 .finding-detail__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
+}
+
+/* 2열이 실제로 성립하는 폭에서만 나눈다. 뷰포트가 아니라 자신이 놓인 폭이
+ * 기준이다 — 같은 컴포넌트가 좁은 detail 열과 넓은 열에 모두 들어간다. */
+@container finding-detail (min-width: 640px) {
+  .finding-detail__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  }
 }
 
 .finding-detail__main,
@@ -1112,7 +1438,6 @@
 
 .finding-card {
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -1127,7 +1452,7 @@
 .finding-card__header p {
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 .finding-card__body {
@@ -1149,7 +1474,7 @@
 
 .finding-kv dt {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
 }
 
 .finding-kv dd {
@@ -1172,14 +1497,13 @@
   grid-template-columns: 52px minmax(0, 1fr) auto;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
+  background: var(--surface-panel);
   color: var(--text-primary);
   text-decoration: none;
 }
 
 .affected-requests a:hover {
-  border-color: var(--border-strong);
   background: var(--surface-hover);
 }
 
@@ -1192,8 +1516,7 @@
 
 .affected-requests span:last-child {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
 }
 
 .recommendation-steps {
@@ -1204,7 +1527,6 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-panel);
   counter-increment: recommendation-step;
@@ -1212,8 +1534,8 @@
 
 .recommendation-steps li::before {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
   content: "step " counter(recommendation-step);
 }
 
@@ -1238,16 +1560,14 @@
   gap: var(--space-3);
   min-block-size: 96px;
   padding: var(--space-4);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .settings-status-card > span:first-child {
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .settings-layout {
@@ -1287,7 +1607,6 @@
   display: grid;
   gap: var(--space-4);
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -1303,21 +1622,21 @@
 }
 
 .settings-form__section-header h3 {
-  font-size: 16px;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .settings-form__section-header p {
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 .settings-alert {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-raised));
   color: var(--text-secondary);
 }
 
@@ -1326,8 +1645,7 @@
 }
 
 .settings-alert--error {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
-  background: color-mix(in srgb, var(--status-error) 10%, transparent);
+  background: color-mix(in srgb, var(--status-error) 14%, var(--surface-raised));
 }
 
 .settings-alert--error strong {
@@ -1343,15 +1661,15 @@
   display: grid;
   gap: var(--space-2);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .settings-field input {
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-panel);
   color: var(--text-primary);
@@ -1372,13 +1690,11 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-caption);
 }
 
 .settings-field__meta span {
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: var(--surface-panel);
 }
@@ -1390,24 +1706,33 @@
 
 .settings-guide {
   display: grid;
-  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* 카드로 감싸지 않는다 — 표 행과 같은 방식으로 divider로만 구분한다
+ * (DESIGN.md §7 (d)). */
 .settings-guide li {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  padding-block: var(--space-3);
+}
+
+.settings-guide li + li {
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.settings-guide li strong::before {
+  margin-inline-end: var(--space-2);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-regular);
+  content: "–";
 }
 
 .settings-guide span {
   color: var(--text-secondary);
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 .request-inspector {
@@ -1425,8 +1750,8 @@
 
 .request-inspector__header h4 {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.35;
+  font: var(--text-h2);
+  letter-spacing: var(--tracking-h2);
 }
 
 .time-distribution {
@@ -1436,8 +1761,7 @@
 
 .time-distribution__header span {
   color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
 }
 
 .time-distribution__bar {
@@ -1486,7 +1810,6 @@
   gap: var(--space-1);
   min-inline-size: 0;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -1494,14 +1817,13 @@
 .time-distribution__legend dt,
 .inspector-next strong {
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  font: var(--text-caption);
+  font-weight: var(--weight-semibold);
 }
 
 .time-distribution__legend dd {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font: var(--text-code);
 }
 
 .inspector-next {
@@ -1512,7 +1834,7 @@
 
 .inspector-next span {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-body-sm);
 }
 
 @media (max-width: 1279px) {
@@ -1528,26 +1850,19 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .requests-detail-desktop {
-    display: none;
-  }
-
-  .requests-detail-compact {
-    display: block;
-  }
-
-  .requests-filters {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .analyzer-layout,
-  .settings-layout,
-  .finding-detail__grid {
+  .timeline-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .findings-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* DESIGN.md §4: request label column은 compact에서 120px다. */
+  .timeline-row {
+    --timeline-label-col: 120px;
+  }
+
+  /* .finding-detail__grid는 container query가 대신하므로 여기서 뺐다. */
+  .analyzer-layout,
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1570,16 +1885,17 @@
   }
 
   .panel__header,
-  .drawer-header,
   .request-detail__header,
   .request-inspector__header,
   .time-distribution__header {
     flex-direction: column;
   }
 
-  .panel__header .cluster,
-  .panel__header .button {
+  /* 버튼을 100% 폭으로 늘리면 라벨이 화면 가운데로 가서 떠 보인다.
+   * cluster만 폭을 채우고 안의 컨트롤은 왼쪽부터 나열한다. */
+  .panel__header .cluster {
     inline-size: 100%;
+    justify-content: flex-start;
   }
 
   .button--sm {
@@ -1590,6 +1906,14 @@
   .findings-filters,
   .request-detail__flow-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 16px 미만이면 iOS Safari가 포커스 시 페이지를 확대한다. */
+  .requests-filters input,
+  .requests-filters select,
+  .findings-filters select,
+  .settings-field input {
+    font: var(--text-form-touch);
   }
 
   .requests-filters .button,

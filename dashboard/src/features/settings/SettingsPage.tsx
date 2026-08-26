@@ -95,11 +95,7 @@ export function SettingsPage({
 
   if (settings.state.state === "loading") {
     return (
-      <Panel
-        description="runtime settings API를 불러오는 중이다."
-        state="loading"
-        title="Settings"
-      >
+      <Panel state="loading" title="설정">
         <span />
       </Panel>
     );
@@ -110,19 +106,14 @@ export function SettingsPage({
       <Panel
         actions={
           <Button onClick={settings.reload} size="sm" variant="ghost">
-            Retry
+            다시 시도
           </Button>
         }
-        description={
-          settings.state.state === "error"
-            ? settings.state.error
-            : "settings payload unavailable"
-        }
-        title="Settings"
+        title="설정"
       >
         <EmptyState
-          description="AsyncScope 내부 settings API가 응답하지 않으면 form을 표시하지 않는다."
-          title="Settings unavailable"
+          description="앱이 실행 중인지 확인한 뒤 다시 시도하세요. 값을 잘못 저장하지 않도록 설정 화면을 열지 않습니다."
+          title="설정을 불러오지 못했습니다"
         />
       </Panel>
     );
@@ -130,23 +121,6 @@ export function SettingsPage({
 
   return (
     <div className="dashboard-page settings-page">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">runtime controls</p>
-          <h2>Settings</h2>
-          <p>
-            live setting과 restart-required setting을 분리해서 적용 상태를
-            확인한다.
-          </p>
-        </div>
-        <StatusBadge
-          icon={payload.tracing ? "●" : "!"}
-          tone={payload.tracing ? "success" : "error"}
-        >
-          tracing {payload.tracing ? "on" : "off"}
-        </StatusBadge>
-      </section>
-
       <RuntimeStatusGrid payload={payload} />
 
       <section className="settings-layout">
@@ -160,7 +134,7 @@ export function SettingsPage({
                 size="sm"
                 variant="ghost"
               >
-                Reset
+                되돌리기
               </Button>
               <Button
                 disabled={!dirty || saveState === "saving"}
@@ -169,12 +143,12 @@ export function SettingsPage({
                 size="sm"
                 variant="primary"
               >
-                Save changes
+                저장
               </Button>
             </div>
           }
-          description="변경된 field만 PATCH한다. live field는 즉시 적용되고 restart field는 pending으로 남는다."
-          title="Runtime settings"
+          description="즉시 적용되는 항목과 재시작이 필요한 항목이 구분되어 있습니다."
+          title="수집 설정"
         >
           <SettingsForm
             draft={draft}
@@ -201,24 +175,24 @@ export function SettingsPage({
 function RuntimeStatusGrid({ payload }: { payload: SettingsPayload }) {
   const pendingCount = Object.keys(payload.pending_restart).length;
   return (
-    <section className="settings-status-grid" aria-label="Settings status">
+    <section className="settings-status-grid" aria-label="설정 상태">
       <StatusCard
-        label="Tracing"
+        label="수집"
         tone={payload.tracing ? "success" : "error"}
         value={payload.tracing ? "running" : "off"}
       />
       <StatusCard
-        label="Persistence"
+        label="저장"
         tone={payload.persisted ? "success" : "inferred"}
         value={payload.persisted ? "persisted" : "process-local"}
       />
       <StatusCard
-        label="Pending restart"
+        label="재시작 대기"
         tone={pendingCount ? "warning" : "success"}
         value={`${pendingCount} fields`}
       />
       <StatusCard
-        label="Feedback"
+        label="피드백"
         tone="observed"
         value={`${payload.feedback.acknowledged} ack · ${payload.feedback.false_positive} false+`}
       />
@@ -272,28 +246,28 @@ function SettingsForm({
     >
       {saveState === "invalid" ? (
         <div className="settings-alert" role="alert">
-          <strong>Invalid settings</strong>
-          <span>범위와 타입을 고친 뒤 다시 저장한다.</span>
+          <strong>저장할 수 없는 값이 있습니다</strong>
+          <span>표시된 항목을 고친 뒤 다시 저장하세요.</span>
         </div>
       ) : null}
       {serverError ? (
         <div className="settings-alert settings-alert--error" role="alert">
-          <strong>Save failed</strong>
+          <strong>저장하지 못했습니다</strong>
           <span>{serverError}</span>
         </div>
       ) : null}
 
       <div className="settings-form__section">
         <div className="settings-form__section-header">
-          <h3>Live settings</h3>
-          <p>저장 즉시 heartbeat 수집에 반영된다.</p>
+          <h3>즉시 적용되는 항목</h3>
+          <p>저장하면 곧바로 적용됩니다.</p>
         </div>
         <SettingField
           currentValue={`${payload.settings.threshold_s}s`}
           error={errors.threshold_s}
           help={rangeHelp(payload.limits.threshold_s, "seconds")}
           id="threshold_s"
-          label="Blocking threshold"
+          label="블로킹 감지 기준"
           onChange={(value) => onChange("threshold_s", value)}
           step="0.001"
           type="number"
@@ -304,7 +278,7 @@ function SettingsForm({
           error={errors.interval_s}
           help={rangeHelp(payload.limits.interval_s, "seconds")}
           id="interval_s"
-          label="Heartbeat interval"
+          label="측정 주기"
           onChange={(value) => onChange("interval_s", value)}
           step="0.001"
           type="number"
@@ -314,15 +288,15 @@ function SettingsForm({
 
       <div className="settings-form__section">
         <div className="settings-form__section-header">
-          <h3>Restart-required settings</h3>
-          <p>현재 process에는 바로 적용되지 않고 pending restart로 표시된다.</p>
+          <h3>재시작이 필요한 항목</h3>
+          <p>앱을 다시 시작해야 적용됩니다. 그때까지 대기 상태로 표시됩니다.</p>
         </div>
         <SettingField
           currentValue={String(payload.settings.buffer_size)}
           error={errors.buffer_size}
           help={rangeHelp(payload.limits.buffer_size, "events")}
           id="buffer_size"
-          label="Buffer size"
+          label="버퍼 크기"
           onChange={(value) => onChange("buffer_size", value)}
           pendingValue={pendingValue(payload.pending_restart.buffer_size)}
           step="1"
@@ -332,9 +306,9 @@ function SettingsForm({
         <SettingField
           currentValue={payload.settings.project_root}
           error={errors.project_root}
-          help="기존 directory만 허용된다. pending root는 source sandbox를 넓히지 않는다."
+          help="이미 있는 디렉터리만 지정할 수 있습니다. 재시작 전까지 코드 열람 범위는 넓어지지 않습니다."
           id="project_root"
-          label="Project root"
+          label="프로젝트 경로"
           onChange={(value) => onChange("project_root", value)}
           pendingValue={pendingValue(payload.pending_restart.project_root)}
           type="text"
@@ -384,8 +358,8 @@ function SettingField({
         />
       </label>
       <div className="settings-field__meta">
-        <span>current: {currentValue}</span>
-        {pendingValue ? <span>pending restart: {pendingValue}</span> : null}
+        <span>현재 {currentValue}</span>
+        {pendingValue ? <span>재시작 후 {pendingValue}</span> : null}
       </div>
       <p className="field-help" id={`${inputId}-help`}>
         {error ?? help}
@@ -402,17 +376,14 @@ function ThemePanel({
   onThemeChange: (light: boolean) => void;
 }) {
   return (
-    <Panel description="선택한 theme은 이 browser에 저장된다." title="Theme">
+    <Panel description="이 브라우저에만 저장됩니다." title="화면 테마">
       <div className="settings-theme-panel">
         <Switch
           checked={isLightTheme}
-          description="저장값이 없으면 dark로 시작한다."
-          label="Light theme"
+          description="기본은 dark mode예요."
+          label="Light mode"
           onCheckedChange={onThemeChange}
         />
-        <p className="field-help">
-          현재 theme: {isLightTheme ? "light" : "dark"}
-        </p>
       </div>
     </Panel>
   );
@@ -420,28 +391,25 @@ function ThemePanel({
 
 function GuidePanel() {
   return (
-    <Panel
-      description="잘못된 설정을 적용된 것처럼 보이지 않게 구분한다."
-      title="Settings guide"
-    >
+    <Panel title="알아두기">
       <ul className="settings-guide">
         <li>
-          <strong>Live fields</strong>
-          <span>threshold와 interval은 저장 즉시 새 heartbeat로 반영된다.</span>
+          <strong>즉시 적용</strong>
+          <span>감지 기준과 측정 주기는 저장하면 바로 반영됩니다.</span>
         </li>
         <li>
-          <strong>Restart-required fields</strong>
-          <span>buffer size와 project root는 pending으로만 기록된다.</span>
-        </li>
-        <li>
-          <strong>Source safety</strong>
+          <strong>재시작 필요</strong>
           <span>
-            pending project root는 source viewer의 sandbox를 넓히지 않는다.
+            버퍼 크기와 프로젝트 경로는 앱을 다시 시작한 뒤 적용됩니다.
           </span>
         </li>
         <li>
-          <strong>Recovery</strong>
-          <span>API가 거부한 값은 current나 pending으로 표시하지 않는다.</span>
+          <strong>소스 열람 범위</strong>
+          <span>재시작 전까지는 코드 열람 범위가 넓어지지 않습니다.</span>
+        </li>
+        <li>
+          <strong>거부된 값</strong>
+          <span>저장되지 않은 값은 적용된 것처럼 표시하지 않습니다.</span>
         </li>
       </ul>
     </Panel>
@@ -467,7 +435,11 @@ function SaveStatus({ state }: { state: SaveState }) {
       <span className="field-help settings-save-status--error">error</span>
     );
   }
-  return <span className="field-help">unsaved changes stay local</span>;
+  return (
+    <span className="field-help">
+      저장하지 않은 변경은 아직 적용되지 않았습니다.
+    </span>
+  );
 }
 
 function draftFromPayload(payload: SettingsPayload): SettingsDraft {
@@ -544,7 +516,7 @@ function rangeHelp(
   limit: SettingsLimits["threshold_s" | "buffer_size"],
   unit: string,
 ) {
-  return `allowed range: ${limit.min}–${limit.max} ${unit}`;
+  return `허용 범위 ${limit.min}–${limit.max} ${unit}`;
 }
 
 function pendingValue(value: number | string | undefined) {

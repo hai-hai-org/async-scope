@@ -34,6 +34,23 @@ export async function fetchExport(): Promise<ExportPayload> {
   return fetchJson<ExportPayload>(`${API_PREFIX}/export`);
 }
 
+/** export JSON을 파일로 저장한다. 화면에 보이는 buffer와 같은 내용이다. */
+export async function downloadExport(): Promise<void> {
+  const payload = await fetchExport();
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "asyncscope-export.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function fetchSettings(): Promise<SettingsPayload> {
   return fetchJson<SettingsPayload>(`${API_PREFIX}/settings`);
 }

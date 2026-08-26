@@ -8,6 +8,7 @@ import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
 import { SourceViewer } from "../request-detail/SourceViewer";
 import { formatDuration, formatTimestamp } from "../timeline/timeline";
 import { severityTone } from "./FindingsTable";
+import { RecommendationSteps, sourceLabel } from "./RecommendationSteps";
 import type { FindingDetailState } from "./useFindingDetail";
 
 type FindingDetailProps = {
@@ -40,13 +41,10 @@ export function FindingDetail({
 
   if (detailState.state === "idle") {
     return (
-      <Panel
-        description="finding을 선택하면 원인 후보와 recommendation을 표시한다."
-        title="Finding detail"
-      >
+      <Panel title="문제 상세">
         <EmptyState
-          description="Analyzer 목록에서 finding row를 선택한다."
-          title="선택된 finding 없음"
+          description="목록에서 항목을 선택하면 원인 후보와 해결 방법이 표시됩니다."
+          title="선택된 항목이 없습니다"
         />
       </Panel>
     );
@@ -55,9 +53,9 @@ export function FindingDetail({
   if (detailState.state === "loading") {
     return (
       <Panel
-        description="finding detail API를 불러오는 중이다."
+        description="상세 정보를 불러오는 중입니다."
         state="loading"
-        title="Finding detail"
+        title="문제 상세"
       >
         <span />
       </Panel>
@@ -73,11 +71,11 @@ export function FindingDetail({
           </Button>
         }
         description={detailState.error ?? "finding detail을 만들 수 없다."}
-        title="Finding detail"
+        title="문제 상세"
       >
         <EmptyState
-          description="finding이 buffer에서 사라졌거나 API를 사용할 수 없는 상태일 수 있다."
-          title="Finding detail unavailable"
+          description="오래된 항목이 버퍼에서 밀려났거나, 앱과 연결되지 않았을 수 있습니다."
+          title="상세 정보를 불러오지 못했습니다"
         />
       </Panel>
     );
@@ -93,8 +91,7 @@ export function FindingDetail({
           {finding.severity}
         </StatusBadge>
       }
-      description="finding evidence, affected request, recommendation과 source를 함께 표시한다."
-      title="Finding detail"
+      title="문제 상세"
     >
       <div className="finding-detail">
         <header className="finding-detail__header">
@@ -151,12 +148,12 @@ function ConfidenceNotice({ finding }: { finding: FindingPayload }) {
 
   return (
     <div className="finding-notice">
-      <strong>확정 원인이 아니라 후보로 해석해야 한다.</strong>
+      <strong>확정된 원인이 아니라 후보입니다.</strong>
       <span>
         {inferred
           ? "이 finding은 추론 evidence를 포함한다. "
           : "관측된 finding이다. "}
-        recommendation certainty는 {finding.recommendation.certainty}이다.
+        해결 방법의 확실성은 {finding.recommendation.certainty} 수준입니다.
       </span>
     </div>
   );
@@ -166,27 +163,27 @@ function FindingMetadata({ finding }: { finding: FindingPayload }) {
   return (
     <dl className="metadata-grid">
       <div>
-        <dt>finding_id</dt>
+        <dt>항목 ID</dt>
         <dd className="mono">{finding.finding_id}</dd>
       </div>
       <div>
-        <dt>duration</dt>
+        <dt>지속 시간</dt>
         <dd>{formatDuration(finding.duration_ns)}</dd>
       </div>
       <div>
-        <dt>threshold</dt>
+        <dt>감지 기준</dt>
         <dd>{formatDuration(finding.threshold_ns)}</dd>
       </div>
       <div>
-        <dt>detected</dt>
+        <dt>감지 시각</dt>
         <dd>{formatTimestamp(finding.detected_at_ns)}</dd>
       </div>
       <div>
-        <dt>confidence</dt>
+        <dt>신뢰도</dt>
         <dd>{formatConfidence(finding.confidence)}</dd>
       </div>
       <div>
-        <dt>recommendation</dt>
+        <dt>해결 방법</dt>
         <dd>
           {finding.recommendation.kind} · {finding.recommendation.certainty}
         </dd>
@@ -207,9 +204,9 @@ function FeedbackControls({
   pending: FindingFeedbackKind | null;
 }) {
   return (
-    <section className="finding-feedback" aria-label="Finding feedback">
+    <section className="finding-feedback" aria-label="피드백">
       <div>
-        <strong>Feedback</strong>
+        <strong>이 판단이 맞나요?</strong>
         <p>
           기록된 feedback은 finding을 숨기지 않는다. 숨김은 UI 정책이 아니다.
         </p>
@@ -222,7 +219,7 @@ function FeedbackControls({
           size="sm"
           variant={finding.feedback.acknowledged ? "secondary" : "ghost"}
         >
-          {finding.feedback.acknowledged ? "Acknowledged" : "Acknowledge"}
+          {finding.feedback.acknowledged ? "확인함" : "확인했다고 표시"}
         </Button>
         <Button
           disabled={finding.feedback.false_positive}
@@ -231,9 +228,7 @@ function FeedbackControls({
           size="sm"
           variant={finding.feedback.false_positive ? "secondary" : "ghost"}
         >
-          {finding.feedback.false_positive
-            ? "False positive"
-            : "Mark false positive"}
+          {finding.feedback.false_positive ? "False positive" : "오탐으로 표시"}
         </Button>
       </div>
       {error ? (
@@ -252,9 +247,9 @@ function SuspectPanel({
 }) {
   const suspect = finding.suspect;
   return (
-    <section className="finding-card" aria-label="Suspect">
+    <section className="finding-card" aria-label="원인 후보">
       <div className="finding-card__header">
-        <strong>Suspect</strong>
+        <strong>원인 후보</strong>
         {suspect ? (
           <StatusBadge
             icon={suspect.certainty === "observed" ? "●" : "△"}
@@ -268,19 +263,19 @@ function SuspectPanel({
         <div className="finding-card__body">
           <dl className="finding-kv">
             <div>
-              <dt>label</dt>
+              <dt>이름</dt>
               <dd>{suspect.label ?? "—"}</dd>
             </div>
             <div>
-              <dt>request_id</dt>
+              <dt>요청 ID</dt>
               <dd>{suspect.request_id ?? "—"}</dd>
             </div>
             <div>
-              <dt>span_id</dt>
+              <dt>구간 ID</dt>
               <dd>{suspect.span_id ?? "—"}</dd>
             </div>
             <div>
-              <dt>source</dt>
+              <dt>코드 위치</dt>
               <dd>{sourceLabel(suspect.source)}</dd>
             </div>
           </dl>
@@ -291,17 +286,17 @@ function SuspectPanel({
               size="sm"
               variant="ghost"
             >
-              Source 보기
+              코드 보기
             </Button>
             <a className="button button--sm button--ghost" href="#/timeline">
-              Timeline 열기
+              타임라인에서 보기
             </a>
           </div>
         </div>
       ) : (
         <EmptyState
-          description="unattributed finding이나 source를 특정할 수 없는 finding은 원인 후보 없이 측정 안내를 먼저 보여 준다."
-          title="원인 후보 없음"
+          description="원인을 특정할 증거가 부족합니다. 아래 측정 안내를 먼저 따라가 보세요."
+          title="원인 후보를 지목하지 않았습니다"
         />
       )}
     </section>
@@ -310,9 +305,9 @@ function SuspectPanel({
 
 function AffectedRequests({ finding }: { finding: FindingPayload }) {
   return (
-    <section className="finding-card" aria-label="Affected requests">
+    <section className="finding-card" aria-label="영향받은 요청">
       <div className="finding-card__header">
-        <strong>Affected requests</strong>
+        <strong>영향받은 요청</strong>
         <span>{finding.affected_requests.length} requests</span>
       </div>
       {finding.affected_requests.length ? (
@@ -331,8 +326,8 @@ function AffectedRequests({ finding }: { finding: FindingPayload }) {
         </ul>
       ) : (
         <EmptyState
-          description="해당 finding이 특정 request window와 겹치지 않았다."
-          title="영향받은 request 없음"
+          description="이 구간과 겹치는 요청이 버퍼에 없습니다."
+          title="영향받은 요청이 없습니다"
         />
       )}
     </section>
@@ -349,10 +344,10 @@ function RecommendationPanel({
   selectedSource: SourceReference | null;
 }) {
   return (
-    <section className="finding-card" aria-label="Recommendation">
+    <section className="finding-card" aria-label="해결 방법">
       <div className="finding-card__header">
         <div>
-          <strong>Recommendation</strong>
+          <strong>해결 방법</strong>
           <p>
             {finding.recommendation.kind} · {finding.recommendation.certainty}
           </p>
@@ -368,28 +363,11 @@ function RecommendationPanel({
           {finding.recommendation.certainty}
         </StatusBadge>
       </div>
-      <ol className="recommendation-steps">
-        {finding.recommendation.steps.map((step) => {
-          const selected = sameSource(selectedSource, step.source);
-          return (
-            <li key={recommendationStepKey(step)}>
-              <p>{step.text}</p>
-              {step.source ? (
-                <Button
-                  className={selected ? "is-active" : undefined}
-                  onClick={() => onSelectSource(step.source)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {sourceLabel(step.source)}
-                </Button>
-              ) : (
-                <span className="field-help">source 없음 · 추가 측정 안내</span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      <RecommendationSteps
+        onSelectSource={onSelectSource}
+        selectedSource={selectedSource}
+        steps={finding.recommendation.steps}
+      />
     </section>
   );
 }
@@ -401,29 +379,6 @@ function firstFindingSource(finding: FindingPayload): SourceReference | null {
   return (
     finding.recommendation.steps.find((step) => step.source !== null)?.source ??
     null
-  );
-}
-
-function recommendationStepKey({
-  source,
-  text,
-}: FindingPayload["recommendation"]["steps"][number]) {
-  return `${text}-${source?.file ?? "none"}-${source?.line ?? "none"}`;
-}
-
-function sourceLabel(source: SourceReference | null) {
-  if (!source) {
-    return "—";
-  }
-  return `${source.file}:${source.line}`;
-}
-
-function sameSource(
-  left: SourceReference | null,
-  right: SourceReference | null,
-) {
-  return Boolean(
-    left && right && left.file === right.file && left.line === right.line,
   );
 }
 

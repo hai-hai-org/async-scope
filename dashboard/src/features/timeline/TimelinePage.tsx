@@ -1,14 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { SummaryState } from "../../App";
 import type {
-  BufferSource,
+  ApiState,
   ClientStatus,
+  ExportPayload,
   NormalizedEvent,
 } from "../../shared/api/schemas";
-import type { SseStatus } from "../../shared/api/sse";
 import { useEventStream } from "../../shared/api/useEventStream";
-import { Button, Panel, StatusBadge } from "../../shared/ui";
-import { eventFixtures } from "../../test/fixtures";
+import {
+  Button,
+  EmptyState,
+  MetricCard,
+  Panel,
+  StatusBadge,
+  Tooltip,
+} from "../../shared/ui";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
+import { BlockingAlert } from "./BlockingAlert";
 import { RequestInspector } from "./RequestInspector";
 import { TimelinePlot } from "./TimelinePlot";
 import { TimelineToolbar } from "./TimelineToolbar";
@@ -17,54 +32,62 @@ import {
   buildTimelineModel,
   clampViewportStart,
   createTimelineViewport,
+  DEFAULT_ZOOM_INDEX,
+  defaultZoomFor,
+  FIT_ALL,
   formatDuration,
   latestCursor,
   mergeTimelineEvents,
   panViewportStart,
   type TimelineSegment,
-  ZOOM_LEVELS,
+  ZOOM_WINDOWS_NS,
+  type ZoomSelection,
+  zoomKeepingAnchor,
 } from "./timeline";
 
-type FixtureKey = keyof typeof eventFixtures;
-
-const fixtureLabels: Record<FixtureKey, string> = {
-  timeline: "two sleep requests",
-  blocking: "blocking",
-  unknownAwait: "unknown await",
-  adapterAwaits: "adapter awaits",
-  failureCancel: "failure/cancel",
-  disconnect: "disconnect",
-  backgroundTask: "background task",
-};
-
 type TimelinePageProps = {
-  bufferSource: BufferSource;
-  events?: NormalizedEvent[];
+  exportState: ApiState<ExportPayload>;
   onClientStatusChange?: (status: ClientStatus | null) => void;
+  onRetry?: () => void;
+  summary: SummaryState;
 };
 
 export function TimelinePage({
-  bufferSource,
-  events,
+  exportState,
   onClientStatusChange,
+  onRetry,
+  summary,
 }: TimelinePageProps) {
-  const [fixtureKey, setFixtureKey] = useState<FixtureKey>("timeline");
-  const [liveEvents, setLiveEvents] = useState<NormalizedEvent[]>(events ?? []);
+  const initialEvents = payloadOf(exportState)?.events;
+  // 출처를 모르는데 "live"로 단정하지 않는다. 끊긴 상태에서 거짓이 된다.
+  const bufferSource = payloadOf(exportState)?.buffer.source;
+  const [liveEvents, setLiveEvents] = useState<NormalizedEvent[]>([]);
   const [pendingEvents, setPendingEvents] = useState<NormalizedEvent[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [zoomIndex, setZoomIndex] = useState(2);
+  // 부트스트랩 값일 뿐이다. 실제 기본 줌은 데이터가 처음 도착했을 때
+  // defaultZoomFor로 한 번 계산해 아래 effect가 덮어쓴다(row가 없는 동안엔
+  // TimelinePlot이 empty-state를 먼저 그리므로 이 값이 화면에 보이지 않는다).
+  const [zoom, setZoom] = useState<ZoomSelection>(FIT_ALL);
   const [viewportStartNs, setViewportStartNs] = useState<number | undefined>();
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
-  const isFixtureMode = events === undefined;
-  const sourceEvents = isFixtureMode ? eventFixtures[fixtureKey] : liveEvents;
-  const zoomLevel = ZOOM_LEVELS[zoomIndex];
-  const model = useMemo(() => buildTimelineModel(sourceEvents), [sourceEvents]);
+  // 기본 줌은 데이터가 처음 채워질 때 한 번만 정한다. 스트림이 계속 들어와
+  // model이 자라거나 사용자가 직접 줌을 조작한 뒤에는 다시 끼어들지 않는다.
+  const hasAppliedDefaultZoomRef = useRef(false);
+  const userAdjustedZoomRef = useRef(false);
+  // initialEvents가 아직 도착하기 전에 SSE가 낱개 이벤트를 먼저 흘려보내면
+  // model.rows가 잠깐 1개짜리로 채워진다. 그 순간을 "처음 채워진 데이터"로
+  // 오인해 defaultZoomFor를 계산하면, 뒤이어 진짜 initialEvents(버퍼 전체)가
+  // 도착해도 이미 잠긴 좁은 줌이 남는다 — 실측: 5분 넘게 퍼진 요청들인데
+  // 250ms 창에 갇혀 세그먼트가 하나도 안 보였다. initialEvents의 결론(있든
+  // 없든)이 나기 전까지는 이 fallback을 막는다.
+  const initialEventsResolvedRef = useRef(false);
+  const model = useMemo(() => buildTimelineModel(liveEvents), [liveEvents]);
   const viewport = useMemo(
-    () => createTimelineViewport(model, zoomLevel, viewportStartNs),
-    [model, viewportStartNs, zoomLevel],
+    () => createTimelineViewport(model, zoom, viewportStartNs),
+    [model, viewportStartNs, zoom],
   );
   const selectedSegment = selectedSegmentId
     ? findSegment(
@@ -77,27 +100,64 @@ export function TimelinePage({
       ? selectedSegment.rowId
       : null;
   const requestDetail = useRequestDetail({
-    fallbackEvents: sourceEvents,
-    fetchEnabled: !isFixtureMode,
+    fallbackEvents: liveEvents,
     requestId: selectedRequestId,
   });
-  const initialCursor = useMemo(() => latestCursor(events ?? []), [events]);
+  const initialCursor = useMemo(
+    () => latestCursor(initialEvents ?? []),
+    [initialEvents],
+  );
 
   useEffect(() => {
-    if (events) {
-      setLiveEvents(events);
+    if (initialEvents) {
+      setLiveEvents(initialEvents);
       setPendingEvents([]);
       setViewportStartNs(undefined);
+      // initialEvents가 곧 "처음 채워진 데이터"의 권위 있는 스냅샷이다.
+      // 여기서 바로 계산하면 아래 fallback effect의 경쟁 상태를 피한다.
+      if (!hasAppliedDefaultZoomRef.current && !userAdjustedZoomRef.current) {
+        const initialModel = buildTimelineModel(initialEvents);
+        if (initialModel.rows.length > 0) {
+          hasAppliedDefaultZoomRef.current = true;
+          setZoom(defaultZoomFor(initialModel));
+        }
+      }
     }
-  }, [events]);
+    // "loading" 동안엔 아직 아무것도 결론나지 않은 것이다 — 이 시점에
+    // resolved로 표시하면 fallback effect가 곧바로 풀려 버려서 gate가
+    // 무력해진다("loading" → "ready"로 넘어가기 전 첫 렌더에서 effect는
+    // initialEvents 값과 무관하게 한 번 실행되기 때문이다).
+    if (exportState.state !== "loading") {
+      initialEventsResolvedRef.current = true;
+    }
+  }, [exportState.state, initialEvents]);
 
   useEffect(() => {
     setViewportStartNs((current) =>
       autoScroll || current == null
-        ? autoScrollStart(model, zoomLevel)
-        : clampViewportStart(model, zoomLevel, current),
+        ? autoScrollStart(model, zoom)
+        : clampViewportStart(model, zoom, current),
     );
-  }, [autoScroll, model, zoomLevel]);
+  }, [autoScroll, model, zoom]);
+
+  // initialEvents가 끝내 비어 있었던 경우의 fallback이다 — 그때는 위
+  // initialEvents effect가 계산할 데이터가 없으므로, 첫 실시간 이벤트가
+  // 도착해 row가 처음 생기는 순간 대신 계산한다. initialEvents의 결론이
+  // 나기 전에는(=아직 무엇으로도 판단할 수 없는 사이) 절대 먼저 끼어들지
+  // 않는다 — 그 경쟁이 바로 위 effect에 남긴 주석의 실측 버그였다.
+  useEffect(() => {
+    if (hasAppliedDefaultZoomRef.current || userAdjustedZoomRef.current) {
+      return;
+    }
+    if (!initialEventsResolvedRef.current) {
+      return;
+    }
+    if (model.rows.length === 0) {
+      return;
+    }
+    hasAppliedDefaultZoomRef.current = true;
+    setZoom(defaultZoomFor(model));
+  }, [model]);
 
   const handleStreamEvent = useCallback(
     (event: NormalizedEvent) => {
@@ -118,15 +178,14 @@ export function TimelinePage({
   }, []);
 
   const stream = useEventStream({
-    enabled: !isFixtureMode,
     initialCursor,
     onEvent: handleStreamEvent,
     onGap: handleGap,
   });
 
-  const streamStatus: SseStatus = isFixtureMode ? "idle" : stream.status;
+  const streamStatus = stream.status;
   const clientStatus = clientStatusFromTimeline({
-    isFixtureMode,
+    hasApiError: exportState.state === "error",
     isPaused,
     streamStatus,
   });
@@ -162,37 +221,63 @@ export function TimelinePage({
     });
   }, [autoScroll, pendingEvents]);
 
+  // 줌 단계를 옮길 때 화면상 playhead 위치를 유지한다. auto-scroll 중이면
+  // 다음 effect가 최신 위치로 다시 붙이므로 굳이 계산하지 않는다.
+  const applyZoom = useCallback(
+    (next: ZoomSelection) => {
+      // 사용자가 직접 줌을 골랐다 — 데이터 기반 기본값 effect는 이제 다시
+      // 끼어들지 않는다.
+      userAdjustedZoomRef.current = true;
+      setZoom(next);
+      if (!autoScroll) {
+        setViewportStartNs(
+          zoomKeepingAnchor(model, next, model.axisEndNs, viewport),
+        );
+      }
+    },
+    [autoScroll, model, viewport],
+  );
+
   const zoomIn = useCallback(() => {
-    setZoomIndex((index) => Math.min(ZOOM_LEVELS.length - 1, index + 1));
-  }, []);
+    // 창을 좁히는 방향. fit에서 들어오면 가장 넓은 단계부터 시작한다.
+    applyZoom(
+      zoom === FIT_ALL ? ZOOM_WINDOWS_NS.length - 1 : Math.max(0, zoom - 1),
+    );
+  }, [applyZoom, zoom]);
 
   const zoomOut = useCallback(() => {
-    setZoomIndex((index) => Math.max(0, index - 1));
-  }, []);
+    if (zoom === FIT_ALL) {
+      return;
+    }
+    applyZoom(Math.min(ZOOM_WINDOWS_NS.length - 1, zoom + 1));
+  }, [applyZoom, zoom]);
+
+  const toggleFitAll = useCallback(() => {
+    applyZoom(zoom === FIT_ALL ? DEFAULT_ZOOM_INDEX : FIT_ALL);
+  }, [applyZoom, zoom]);
 
   const panLeft = useCallback(() => {
     setAutoScroll(false);
     setViewportStartNs((current) =>
       panViewportStart(
         model,
-        zoomLevel,
-        current ?? autoScrollStart(model, zoomLevel),
+        zoom,
+        current ?? autoScrollStart(model, zoom),
         -1,
       ),
     );
-  }, [model, zoomLevel]);
+  }, [model, zoom]);
 
   const panRight = useCallback(() => {
     setAutoScroll(false);
     setViewportStartNs((current) =>
-      panViewportStart(
-        model,
-        zoomLevel,
-        current ?? autoScrollStart(model, zoomLevel),
-        1,
-      ),
+      panViewportStart(model, zoom, current ?? autoScrollStart(model, zoom), 1),
     );
-  }, [model, zoomLevel]);
+  }, [model, zoom]);
+
+  const selectSegment = useCallback((segmentId: string) => {
+    setSelectedSegmentId(segmentId);
+  }, []);
 
   const toggleAutoScroll = useCallback(() => {
     setAutoScroll((current) => !current);
@@ -219,13 +304,17 @@ export function TimelinePage({
         event.preventDefault();
         zoomIn();
       }
-      if (event.key === "-") {
+      if (event.key === "-" || event.key === "_") {
         event.preventDefault();
         zoomOut();
       }
-      if (event.key.toLowerCase() === "a") {
-        event.preventDefault();
+      if (event.key === "a" || event.key === "A") {
         toggleAutoScroll();
+      }
+      // 세그먼트 안에서는 화살표가 구간 이동을 담당한다 (roving tabindex).
+      // 여기서 viewport를 함께 움직이면 둘이 싸운다.
+      if (isInsideSegments(event.target)) {
+        return;
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
@@ -242,123 +331,268 @@ export function TimelinePage({
 
   return (
     <div className="dashboard-page">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Day15+16 · Issue #63</p>
-          <h2>Timeline controls와 RequestInspector</h2>
-          <p>
-            live stream을 잃지 않고 pause·zoom·pan으로 탐색하며, 선택한
-            request의 metadata와 시간 분포를 같은 event buffer에서 설명한다.
-          </p>
-        </div>
-        <div className="cluster">
-          {isFixtureMode ? (
-            (Object.keys(eventFixtures) as FixtureKey[]).map((key) => (
-              <Button
-                className={fixtureKey === key ? "is-focus" : undefined}
-                key={key}
-                onClick={() => {
-                  setFixtureKey(key);
-                  setSelectedSegmentId(null);
-                }}
-                size="sm"
-                variant={fixtureKey === key ? "primary" : "ghost"}
-              >
-                {fixtureLabels[key]}
-              </Button>
-            ))
-          ) : (
-            <StatusBadge icon="●" tone="observed">
-              export data
-            </StatusBadge>
-          )}
-        </div>
-      </section>
+      <SummaryMetrics summary={summary} />
 
-      <Panel
-        actions={
-          <StatusBadge icon="△" tone="inferred">
-            inferred uses dashed border
-          </StatusBadge>
-        }
-        description="색상 없이도 icon, label, border style로 상태와 근거를 구분한다."
-        title="Timeline"
-      >
-        <TimelineToolbar
-          autoScroll={autoScroll}
-          bufferSource={bufferSource}
-          bufferedCount={pendingEvents.length}
-          canPan={viewport.durationNs < model.durationNs}
-          canReconnect={
-            !isFixtureMode &&
-            (streamStatus === "gap" ||
-              streamStatus === "error" ||
-              streamStatus === "disconnected")
-          }
-          canZoomIn={zoomIndex < ZOOM_LEVELS.length - 1}
-          canZoomOut={zoomIndex > 0}
-          eventCount={sourceEvents.length}
-          isPaused={isPaused}
-          onPanLeft={panLeft}
-          onPanRight={panRight}
-          onReconnect={reconnect}
-          onToggleAutoScroll={toggleAutoScroll}
-          onTogglePause={togglePause}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          streamStatus={streamStatus}
-          windowLabel={formatDuration(viewport.durationNs)}
-          zoomLevel={zoomLevel}
-        />
-        {stream.gap ? (
-          <div className="timeline-alert" role="alert">
-            <strong>event gap</strong>
-            <span>
-              cursor {stream.gap.cursor ?? "none"} 이후 stream을 이어 받을 수
-              없다. Reconnect는 cursor 없이 현재 buffer를 다시 읽는다.
-            </span>
-          </div>
-        ) : null}
-        <TimelinePlot
-          model={model}
-          onSelectSegment={setSelectedSegmentId}
-          playheadNs={model.axisEndNs}
-          selectedSegmentId={selectedSegmentId}
-          viewport={viewport}
-        />
-      </Panel>
+      <section className="timeline-layout">
+        <div className="timeline-main">
+          <Panel title="Request Timeline">
+            <TimelineToolbar
+              autoScroll={autoScroll}
+              bufferSource={bufferSource}
+              bufferedCount={pendingEvents.length}
+              canPan={viewport.durationNs < model.durationNs}
+              canReconnect={
+                streamStatus === "gap" ||
+                streamStatus === "error" ||
+                streamStatus === "disconnected"
+              }
+              canZoomIn={zoom === FIT_ALL || zoom > 0}
+              canZoomOut={zoom !== FIT_ALL && zoom < ZOOM_WINDOWS_NS.length - 1}
+              eventCount={liveEvents.length}
+              isFitAll={zoom === FIT_ALL}
+              isPaused={isPaused}
+              onPanLeft={panLeft}
+              onPanRight={panRight}
+              onReconnect={reconnect}
+              onToggleAutoScroll={toggleAutoScroll}
+              onToggleFitAll={toggleFitAll}
+              onTogglePause={togglePause}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              streamStatus={streamStatus}
+              windowLabel={formatDuration(viewport.durationNs)}
+            />
+            {stream.gap ? (
+              <div className="timeline-alert" role="alert">
+                <strong>이어지지 않은 구간이 있습니다</strong>
+                <span>
+                  화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시
+                  연결하면 현재 버퍼를 처음부터 읽습니다.
+                </span>
+              </div>
+            ) : null}
+            <TimelineBody
+              exportState={exportState}
+              hasRows={model.rows.length > 0}
+              onRetry={onRetry}
+            >
+              <TimelinePlot
+                clockAnchor={summary.anchor}
+                model={model}
+                onSelectSegment={selectSegment}
+                playheadNs={model.axisEndNs}
+                selectedSegmentId={selectedSegmentId}
+                viewport={viewport}
+              />
+              {/* 범례는 플롯을 읽는 도구다. 별 panel로 떼어 두면 인스펙터
+                  자리를 빼앗고 플롯과 멀어진다. */}
+              <Legend />
+            </TimelineBody>
+          </Panel>
 
-      <section className="grid grid--two">
-        <RequestInspector
-          detailState={requestDetail.state}
-          onRetry={requestDetail.reload}
-          selectedSegment={selectedSegment}
-        />
-        <Panel
-          description="Timeline state vocabulary를 고정한다."
-          title="Legend"
-        >
-          <div className="legend-grid">
-            <StatusBadge icon="▶" tone="observed">
-              running
-            </StatusBadge>
-            <StatusBadge icon="Ⅱ" tone="observed">
-              waiting
-            </StatusBadge>
-            <StatusBadge icon="!" tone="error">
-              blocking
-            </StatusBadge>
-            <StatusBadge icon="→" tone="success">
-              response
-            </StatusBadge>
-            <StatusBadge icon="…" tone="inferred">
-              truncated
-            </StatusBadge>
-          </div>
-        </Panel>
+          <BlockingAlert
+            blockingCount={payloadOf(summary.state)?.blocking_count ?? 0}
+            clockAnchor={summary.anchor}
+          />
+        </div>
+
+        <div className="detail-aside">
+          <RequestInspector
+            detailState={requestDetail.state}
+            onRetry={requestDetail.reload}
+            selectedSegment={selectedSegment}
+          />
+        </div>
       </section>
     </div>
   );
+}
+
+function Legend() {
+  return (
+    <div className="legend-grid">
+      {LEGEND.map((item) => (
+        <Tooltip key={item.label} label={item.meaning} side="top">
+          <StatusBadge focusable icon={item.icon} tone={item.tone}>
+            {item.label}
+          </StatusBadge>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
+const LEGEND = [
+  {
+    icon: "▶",
+    label: "Running",
+    meaning: "코드 실행 중",
+    tone: "observed" as const,
+  },
+  {
+    icon: "Ⅱ",
+    label: "Waiting",
+    meaning: "await로 대기 중이며 Event Loop는 다른 일을 합니다",
+    tone: "observed" as const,
+  },
+  {
+    icon: "!",
+    label: "Blocking",
+    meaning: "Event Loop가 막혀 다른 요청이 진행하지 못했습니다",
+    tone: "error" as const,
+  },
+  {
+    icon: "→",
+    label: "Response",
+    meaning: "응답 전송",
+    tone: "success" as const,
+  },
+  {
+    icon: "…",
+    label: "Truncated",
+    meaning: "화면 밖으로 이어지는 구간",
+    tone: "inferred" as const,
+  },
+  {
+    icon: "△",
+    label: "추론값",
+    meaning: "점선 테두리는 관찰이 아니라 추론된 구간입니다",
+    tone: "inferred" as const,
+  },
+];
+
+function SummaryMetrics({ summary }: { summary: SummaryState }) {
+  const data = payloadOf(summary.state);
+  const state = metricState(summary);
+
+  return (
+    <section className="metric-grid" aria-label="요약 지표">
+      <MetricCard
+        description="최근 60초 기준"
+        label="요청 수"
+        state={state}
+        unit="req/s"
+        value={formatNumber(data?.request_rate_per_second)}
+      />
+      <MetricCard
+        description="아직 응답이 끝나지 않은 요청"
+        label="활성 요청"
+        state={state}
+        value={data?.active_requests ?? "—"}
+      />
+      <MetricCard
+        description={`측정 표본 ${data?.loop_delay.samples ?? 0}개`}
+        label="이벤트 루프 지연 (최대)"
+        state={state}
+        tone={data?.loop_delay.max_ns ? "error" : "neutral"}
+        value={
+          data?.loop_delay.max_ns ? formatDuration(data.loop_delay.max_ns) : "—"
+        }
+      />
+      <MetricCard
+        description="임계값을 넘겨 Event Loop를 막은 구간"
+        label="블로킹 감지"
+        state={state}
+        tone={data?.blocking_count ? "error" : "neutral"}
+        unit="건"
+        value={data?.blocking_count ?? "—"}
+      />
+      <MetricCard
+        description="응답을 만든 시각"
+        label="서버 시간"
+        state={state}
+        value={data ? formatServerTime(data.server_time) : "—"}
+      />
+    </section>
+  );
+}
+
+function TimelineBody({
+  children,
+  exportState,
+  hasRows,
+  onRetry,
+}: {
+  children: ReactNode;
+  exportState: ApiState<ExportPayload>;
+  hasRows: boolean;
+  onRetry?: () => void;
+}) {
+  if (exportState.state === "loading") {
+    return (
+      <div className="panel__state" aria-busy="true">
+        <span className="skeleton" />
+        <span className="skeleton" style={{ inlineSize: "72%" }} />
+        <span>실행 기록을 불러오는 중입니다.</span>
+      </div>
+    );
+  }
+
+  if (exportState.state === "error") {
+    return (
+      <EmptyState
+        action={
+          onRetry ? (
+            <Button onClick={onRetry} size="sm" variant="secondary">
+              다시 시도
+            </Button>
+          ) : undefined
+        }
+        description="개발 서버가 실행 중인지 확인한 뒤 다시 시도하세요."
+        title="앱과 연결되지 않았습니다"
+      />
+    );
+  }
+
+  if (!hasRows) {
+    return (
+      <EmptyState
+        description="앱에 요청을 보내면 실행 흐름이 여기에 나타납니다."
+        title="요청을 기다리고 있습니다"
+      />
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function payloadOf<T>(state: ApiState<T>): T | null {
+  return state.state === "ready" || state.state === "empty" ? state.data : null;
+}
+
+function metricState(summary: SummaryState) {
+  if (summary.state.state === "loading") {
+    return "loading";
+  }
+  if (summary.state.state === "error") {
+    return "unavailable";
+  }
+  // 마지막 조회가 실패했으면 값이 남아 있어도 live라고 하지 않는다.
+  if (summary.isStale) {
+    return "stale";
+  }
+  return summary.state.state === "empty" ? "empty" : "ready";
+}
+
+function formatNumber(value: number | null | undefined) {
+  if (value == null) {
+    return "—";
+  }
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function formatServerTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) {
+    return value;
+  }
+  // 행 시각과 같은 24시간 표기를 쓴다. 한 화면에서 표기가 갈리면 안 된다.
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
 function findSegment(segments: TimelineSegment[], id: string) {
@@ -366,16 +600,16 @@ function findSegment(segments: TimelineSegment[], id: string) {
 }
 
 function clientStatusFromTimeline({
-  isFixtureMode,
+  hasApiError,
   isPaused,
   streamStatus,
 }: {
-  isFixtureMode: boolean;
+  hasApiError: boolean;
   isPaused: boolean;
-  streamStatus: SseStatus;
+  streamStatus: string;
 }): ClientStatus | null {
-  if (isFixtureMode) {
-    return null;
+  if (hasApiError) {
+    return "disconnected";
   }
   if (isPaused) {
     return "paused";
@@ -395,6 +629,14 @@ function isTextEntry(target: EventTarget | null) {
     return false;
   }
   return Boolean(target.closest("input, textarea, select, [contenteditable]"));
+}
+
+/** 포커스가 타임라인 구간 목록 안에 있는가. */
+function isInsideSegments(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest(".timeline-segment"));
 }
 
 function isButtonLike(target: EventTarget | null) {

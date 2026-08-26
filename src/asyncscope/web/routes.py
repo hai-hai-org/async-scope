@@ -177,9 +177,14 @@ def _summary(app_scope, params: dict[str, list[str]]) -> dict:
         now_ns=_metrics_anchor(events, buffer.source),
         window_s=_one(params, "window", str(DEFAULT_WINDOW_S)),
     )
+    # 이벤트의 timestamp_ns는 perf_counter_ns라 벽시계가 아니다. 값을 섞지 않는다.
+    # 대신 두 시계를 나란히 읽어 기준점 쌍으로 내보낸다. 화면이 event 시각을 사람이
+    # 읽는 시각으로 옮기려면 이 쌍이 필요하다. 변환은 client가 하고 여기서는
+    # 계산하지 않는다. 두 값 사이에 다른 작업이 끼면 기준점이 틀어지므로 붙여 읽는다.
+    wall, perf = datetime.now(UTC), time.perf_counter_ns()
     return {
-        # 이벤트의 timestamp_ns는 perf_counter_ns라 벽시계가 아니다. 둘을 섞지 않는다.
-        "server_time": datetime.now(UTC).isoformat(),
+        "server_time": wall.isoformat(),
+        "server_perf_counter_ns": perf,
         "status": app_scope.status,
         "status_reason": app_scope.status_reason,
         **payload,

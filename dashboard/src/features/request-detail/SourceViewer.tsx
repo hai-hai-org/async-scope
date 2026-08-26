@@ -11,13 +11,10 @@ export function SourceViewer({ source }: SourceViewerProps) {
 
   if (!source || snippet.state.state === "missing") {
     return (
-      <Panel
-        description="source가 없는 span은 project file로 연결하지 않는다."
-        title="SourceViewer"
-      >
+      <Panel title="코드 위치">
         <EmptyState
-          description="missing source는 안전 경계, ring buffer truncation, runtime 내부 frame 때문에 발생할 수 있다."
-          title="Source 없음"
+          description="프로젝트 밖의 코드이거나, 런타임 내부 프레임이어서 표시하지 않습니다."
+          title="표시할 코드가 없습니다"
         />
       </Panel>
     );
@@ -28,7 +25,7 @@ export function SourceViewer({ source }: SourceViewerProps) {
       <Panel
         description={`${source.file}:${source.line}`}
         state="loading"
-        title="SourceViewer"
+        title="코드 위치"
       >
         <span />
       </Panel>
@@ -44,11 +41,11 @@ export function SourceViewer({ source }: SourceViewerProps) {
           </Button>
         }
         description={snippet.state.error}
-        title="SourceViewer"
+        title="코드 위치"
       >
         <EmptyState
-          description="project root 밖, 비 Python 파일, 없는 파일, 권한 문제는 snippet을 표시하지 않는다."
-          title="Source를 읽을 수 없음"
+          description="프로젝트 경로 밖의 파일, Python이 아닌 파일, 권한이 없는 파일은 열지 않습니다."
+          title="코드를 읽을 수 없습니다"
         />
       </Panel>
     );
@@ -57,7 +54,7 @@ export function SourceViewer({ source }: SourceViewerProps) {
   const data = snippet.state.data;
 
   return (
-    <Panel description={`${data.file}:${source.line}`} title="SourceViewer">
+    <Panel description={`${data.file}:${source.line}`} title="코드 위치">
       <pre className="source-viewer">
         {data.lines.map((line, index) => {
           const lineNumber = data.start_line + index;

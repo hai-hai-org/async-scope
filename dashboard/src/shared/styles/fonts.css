@@ -1,0 +1,53 @@
+/* 오프라인 데모를 위해 필요한 weight만 저장소에 담는다 (DESIGN.md §3).
+ * 외부 font 요청을 만들지 않는다. 두 폰트 모두 SIL OFL 1.1 — fonts/OFL.txt 참조.
+ *
+ * Noto Sans KR: fontsource의 통합 `korean` subset을 쓴다. 한글 11,172자와
+ * Latin·숫자·기본 문장부호를 모두 포함하므로 `latin` subset 파일과
+ * unicode-range 분리가 필요하지 않다 (fontTools cmap 대조로 확인: 차집합 0).
+ *
+ * font-display는 swap이 아니라 block이다. 폴백으로 한 번 그린 뒤 교체되면
+ * mono 열 폭과 타임라인 정렬이 눈에 띄게 튄다. 이 제품에서는 초기 공백이
+ * 레이아웃 흔들림보다 낫다.
+ */
+
+@font-face {
+  font-family: "Noto Sans KR";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./fonts/noto-sans-kr-korean-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url("./fonts/noto-sans-kr-korean-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url("./fonts/noto-sans-kr-korean-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("./fonts/noto-sans-kr-korean-700-normal.woff2") format("woff2");
+}
+
+/* variable font 한 개로 전 weight를 덮는다. Latin 전용이므로 source viewer의
+ * 한국어 주석 줄은 Noto Sans KR로 폴백한다 (DESIGN.md §8 debt 기록). */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url("./fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+}

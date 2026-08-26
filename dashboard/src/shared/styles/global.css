@@ -1,3 +1,4 @@
+@import "./fonts.css";
 @import "./tokens.css";
 
 * {
@@ -6,16 +7,22 @@
 
 html {
   min-inline-size: 320px;
+  /* 브라우저의 기본 글꼴 크기 설정을 그대로 존중한다. 여기에 px를 박으면
+   * 사용자가 글씨를 키워도 화면이 반응하지 않는다.
+   * font: var(--text-body)를 여기에 두면 rem 토큰이 root의 font-size를
+   * 자기 자신으로 참조하는 순환이 되므로 body로 내린다. */
+  font-size: 100%;
   background: var(--surface-canvas);
   color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.55;
+  /* 한국어 어절이 중간에서 끊기지 않게 한다 (DESIGN.md §3).
+   * 긴 ID·경로는 개별 규칙의 overflow-wrap이 넘칠 때만 강제 분리한다. */
+  word-break: keep-all;
 }
 
 body {
   margin: 0;
   min-block-size: 100dvh;
+  font: var(--text-body);
 }
 
 button,
@@ -86,7 +93,7 @@ a {
   position: fixed;
   inset-block-start: var(--space-3);
   inset-inline-start: var(--space-3);
-  z-index: 50;
+  z-index: var(--z-sticky);
   transform: translateY(-160%);
 }
 
@@ -99,7 +106,7 @@ a {
   inset-block-start: 0;
   block-size: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: var(--space-6);
   padding: var(--space-5) var(--space-4);
   border-inline-end: 1px solid var(--border-subtle);
@@ -115,9 +122,8 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font: var(--text-h1);
+  letter-spacing: var(--tracking-h1);
 }
 
 .brand__glyph {
@@ -132,12 +138,12 @@ a {
 }
 
 .brand__caption,
-.sidebar__footer,
 .footer,
 .eyebrow,
 .field-help {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .nav-list {
@@ -156,6 +162,10 @@ a {
   border-radius: var(--radius-control);
   color: var(--text-secondary);
   text-decoration: none;
+  transition:
+    background-color var(--motion-micro) var(--ease-micro),
+    color var(--motion-micro) var(--ease-micro),
+    border-color var(--motion-micro) var(--ease-micro);
 }
 
 .nav-item[aria-current="page"] {
@@ -167,11 +177,6 @@ a {
 .nav-item:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
-}
-
-.nav-icon {
-  inline-size: 20px;
-  text-align: center;
 }
 
 .shell-body {
@@ -188,31 +193,42 @@ a {
   justify-content: space-between;
   gap: var(--space-4);
   padding: 0 var(--space-6);
-  border-block-end: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+  /* 반투명도 하단 선도 없다. 뒤로 스크롤되는 것이 없으니 유리 효과가 성립하지
+   * 않고 색만 어긋나 보이며(DESIGN.md §7의 glassmorphism 금지), 하단 선은 바로
+   * 아래 패널 상단과 겹쳐 이중선이 된다. 분리는 같은 표면 + 여백으로만 한다. */
+  background: var(--surface-canvas);
 }
 
 .header {
   min-block-size: var(--header-height);
   flex-wrap: wrap;
-  padding-block: var(--space-3);
+  padding-block: var(--space-4) var(--space-2);
 }
 
-.header > div:first-child {
+.header__heading {
   min-inline-size: 0;
+}
+
+.header__description {
+  max-inline-size: 68ch;
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font: var(--text-body-sm);
+}
+
+.header__error {
+  color: var(--status-error);
+  font: var(--text-caption);
 }
 
 .footer {
   min-block-size: var(--footer-height);
-  border-block-start: 1px solid var(--border-subtle);
-  border-block-end: 0;
 }
 
 .header__title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  font: var(--text-h1);
+  letter-spacing: var(--tracking-h1);
 }
 
 .header__meta,
@@ -229,38 +245,18 @@ a {
   min-inline-size: 0;
 }
 
+/* 테마·Export를 한 덩어리로 묶어 배지와 같은 줄바꿈에 휘둘리지 않게 한다. */
+.header__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .main {
   min-inline-size: 0;
   min-block-size: 0;
   overflow: auto;
   padding: var(--space-6);
-}
-
-.showcase {
-  display: grid;
-  gap: var(--space-6);
-  max-inline-size: 1380px;
-  margin: 0 auto;
-}
-
-.showcase-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-6);
-  align-items: end;
-}
-
-.showcase-hero h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.showcase-hero p {
-  max-inline-size: 760px;
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
 }
 
 .dashboard-page {
@@ -270,31 +266,11 @@ a {
   margin: 0 auto;
 }
 
-.page-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-6);
-  align-items: end;
-}
-
-.page-hero h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.page-hero p {
-  max-inline-size: 760px;
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
-}
-
 .header__reason {
   max-inline-size: 680px;
   margin: var(--space-1) 0 0;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
   overflow-wrap: anywhere;
 }
 
@@ -328,7 +304,6 @@ a {
   gap: var(--space-2);
   min-block-size: 84px;
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -345,14 +320,12 @@ a {
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
 }
 
 .code-sample {
   overflow: auto;
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   color: var(--text-secondary);
@@ -368,20 +341,20 @@ a {
 .metadata-grid div {
   min-inline-size: 0;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
 
 .metadata-grid dt {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
 }
 
 .metadata-grid dd {
   margin: var(--space-1) 0 0;
   overflow-wrap: anywhere;
-  font-family: var(--font-mono);
+  font: var(--text-code);
 }
 
 @media (max-width: 1279px) {
@@ -389,20 +362,14 @@ a {
     grid-template-columns: var(--sidebar-compact) minmax(0, 1fr);
   }
 
+  /* 인터랙티브가 아니고 사이드바가 aria-label을 가지므로 완전히 감춰도 된다. */
   .brand__text,
-  .brand__caption,
-  .nav-label,
-  .sidebar__footer {
+  .brand__caption {
     display: none;
   }
 
   .sidebar {
     padding-inline: var(--space-3);
-  }
-
-  .nav-item {
-    justify-content: center;
-    padding-inline: 0;
   }
 
   .grid--three {
@@ -419,7 +386,7 @@ a {
   .sidebar {
     position: fixed;
     inset: auto 0 0;
-    z-index: 20;
+    z-index: var(--z-nav);
     block-size: 64px;
     grid-template: none;
     padding: var(--space-2);
@@ -427,29 +394,21 @@ a {
     border-inline-end: 0;
   }
 
-  .brand,
-  .sidebar__footer {
+  .brand {
     display: none;
   }
 
   .nav-list {
     block-size: 100%;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-1);
   }
 
   .nav-item {
     min-block-size: var(--control-touch);
+    justify-content: center;
     padding-inline: var(--space-1);
-    font-size: 11px;
-  }
-
-  .nav-label {
-    display: inline;
-  }
-
-  .nav-icon {
-    display: none;
+    font: var(--text-caption);
   }
 
   .shell-body {
@@ -461,16 +420,27 @@ a {
   .footer {
     align-items: start;
     flex-direction: column;
-    padding: var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
   }
 
+  /* 컨트롤이 한 줄에 모이게 한다. inline-size: 100%를 주면 switch의
+   * space-between이 라벨과 토글을 화면 양 끝으로 벌린다. */
   .header__actions {
     inline-size: 100%;
     justify-content: flex-start;
+    gap: var(--space-2);
   }
 
   .header__actions .switch-field {
-    inline-size: 100%;
+    gap: var(--space-2);
+  }
+
+  .header__description {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
 
   .footer {
@@ -481,8 +451,6 @@ a {
     padding: var(--space-4);
   }
 
-  .showcase-hero,
-  .page-hero,
   .grid--two,
   .grid--three {
     grid-template-columns: minmax(0, 1fr);

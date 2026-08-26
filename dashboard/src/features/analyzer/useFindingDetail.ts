@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchFindingDetail,
   postFindingFeedback,
@@ -72,10 +72,15 @@ export function useFindingDetail(findingId: string | null) {
     }
   };
 
+  // identity를 고정한다. 렌더마다 새 함수면 이걸 의존성에 넣은 effect가 루프를 돈다.
+  const reload = useCallback(() => {
+    setReloadToken((value) => value + 1);
+  }, []);
+
   return {
     feedbackPending,
     markFeedback,
-    reload: () => setReloadToken((value) => value + 1),
+    reload,
     state,
   };
 }

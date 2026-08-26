@@ -18,14 +18,14 @@ export function ExecutionFlowTree({
   if (spans.length === 0) {
     return (
       <div className="execution-flow-empty">
-        <strong>Execution Flow 없음</strong>
-        <span>request detail에 span tree가 없거나 앞 이벤트가 밀려났다.</span>
+        <strong>실행 흐름이 없습니다</strong>
+        <span>구간 정보가 없거나, 앞부분 이벤트가 버퍼에서 밀려났습니다.</span>
       </div>
     );
   }
 
   return (
-    <ul className="execution-flow" aria-label="Execution Flow">
+    <ul className="execution-flow" aria-label="실행 흐름">
       {spans.map((span) => (
         <SpanTreeItem
           key={span.span_id}

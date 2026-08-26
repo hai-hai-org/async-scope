@@ -4,6 +4,20 @@ export type TableColumn<T> = {
   header: string;
   key: string;
   render: (row: T) => ReactNode;
+  /** table-layout: fixed의 열 폭. 지정하지 않으면 남은 폭을 나눠 갖는다. */
+  width?: string;
+  /** 숫자 열은 오른쪽 정렬해야 자릿수가 맞는다. */
+  align?: "start" | "end";
+  /** tabular-nums로 폭을 고정한다. stream 갱신 중 숫자가 흔들리지 않게 한다. */
+  numeric?: boolean;
+  /** 지정하면 헤더가 정렬 버튼이 된다. sort prop이 함께 있어야 동작한다. */
+  sortKey?: string;
+};
+
+export type TableSort<K extends string = string> = {
+  key: K;
+  order: "asc" | "desc";
+  onChange: (key: K, order: "asc" | "desc") => void;
 };
 
 type TableProps<T> = {
@@ -13,6 +27,12 @@ type TableProps<T> = {
   getRowId: (row: T) => string;
   rows: T[];
   selectedId?: string;
+  /**
+   * 서버 정렬 상태. 없으면 헤더는 평범한 텍스트로 렌더링한다.
+   * 백엔드가 정렬을 지원하지 않는 목록(Analyzer)에서 현재 페이지만
+   * 정렬하면 pagination과 어긋나 사용자를 오해시키므로 만들지 않는다.
+   */
+  sort?: TableSort;
 };
 
 export function Table<T>({
@@ -22,17 +42,21 @@ export function Table<T>({
   getRowId,
   rows,
   selectedId,
+  sort,
 }: TableProps<T>) {
   return (
-    <section aria-label={`${caption} table scroll area`} className="table-wrap">
+    <section aria-label={`${caption} 스크롤 영역`} className="table-wrap">
       <table className="table">
-        <caption>{caption}</caption>
+        <caption className="sr-only">{caption}</caption>
+        <colgroup>
+          {columns.map((column) => (
+            <col key={column.key} style={{ width: column.width }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key} scope="col">
-                {column.header}
-              </th>
+              <HeaderCell column={column} key={column.key} sort={sort} />
             ))}
           </tr>
         </thead>
@@ -47,7 +71,15 @@ export function Table<T>({
               return (
                 <tr aria-selected={selectedId === rowId} key={rowId}>
                   {columns.map((column) => (
-                    <td key={column.key}>{column.render(row)}</td>
+                    <td
+                      className={cellClass(column)}
+                      key={column.key}
+                      style={
+                        column.align ? { textAlign: column.align } : undefined
+                      }
+                    >
+                      {column.render(row)}
+                    </td>
                   ))}
                 </tr>
               );
@@ -57,4 +89,52 @@ export function Table<T>({
       </table>
     </section>
   );
+}
+
+function HeaderCell<T>({
+  column,
+  sort,
+}: {
+  column: TableColumn<T>;
+  sort?: TableSort;
+}) {
+  const sortable = Boolean(column.sortKey && sort);
+  const active = sortable && sort?.key === column.sortKey;
+  const ariaSort = active
+    ? sort?.order === "asc"
+      ? "ascending"
+      : "descending"
+    : undefined;
+
+  return (
+    <th
+      aria-sort={sortable ? (ariaSort ?? "none") : undefined}
+      className={cellClass(column)}
+      scope="col"
+      style={column.align ? { textAlign: column.align } : undefined}
+    >
+      {sortable ? (
+        <button
+          className="table__sort"
+          onClick={() => {
+            // 같은 열을 다시 누르면 방향만 뒤집는다.
+            const nextOrder = active && sort?.order === "desc" ? "asc" : "desc";
+            sort?.onChange(column.sortKey as string, nextOrder);
+          }}
+          type="button"
+        >
+          <span>{column.header}</span>
+          <span aria-hidden="true" className="table__sort-arrow">
+            {active ? (sort?.order === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+      ) : (
+        column.header
+      )}
+    </th>
+  );
+}
+
+function cellClass<T>(column: TableColumn<T>) {
+  return column.numeric ? "table__cell--numeric" : undefined;
 }
