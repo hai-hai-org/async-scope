@@ -14,7 +14,10 @@ export function FindingsTable({
   selectedFindingId,
 }: FindingsTableProps) {
   return (
-    <div className="table-wrap analyzer-table-wrap">
+    <section
+      aria-label="Findings table scroll area"
+      className="table-wrap analyzer-table-wrap"
+    >
       <table className="table analyzer-table">
         <caption>Findings</caption>
         <thead>
@@ -93,7 +96,7 @@ export function FindingsTable({
           )}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }
 

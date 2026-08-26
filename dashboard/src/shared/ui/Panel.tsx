@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 
 type PanelState = "ready" | "loading" | "empty" | "error";
 
@@ -19,11 +19,13 @@ export function Panel({
   stateMessage,
   title,
 }: PanelProps) {
+  const titleId = useId();
+
   return (
-    <section className="panel" aria-labelledby={`${panelId(title)}-title`}>
+    <section className="panel" aria-labelledby={titleId}>
       <div className="panel__header">
         <div>
-          <h3 className="panel__title" id={`${panelId(title)}-title`}>
+          <h3 className="panel__title" id={titleId}>
             {title}
           </h3>
           {description ? (
@@ -72,8 +74,4 @@ function renderPanelBody(
     );
   }
   return children;
-}
-
-function panelId(value: string) {
-  return value.replaceAll(/[^a-zA-Z0-9가-힣]+/g, "-").replace(/^-|-$/g, "");
 }

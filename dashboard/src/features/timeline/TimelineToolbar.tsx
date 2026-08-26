@@ -58,6 +58,7 @@ export function TimelineToolbar({
           {isPaused ? "Resume" : "Pause"}
         </Button>
         <Button
+          aria-label="Zoom out timeline"
           disabled={!canZoomOut}
           onClick={onZoomOut}
           size="sm"
@@ -69,6 +70,7 @@ export function TimelineToolbar({
           {windowLabel} · {zoomLevel}x
         </span>
         <Button
+          aria-label="Zoom in timeline"
           disabled={!canZoomIn}
           onClick={onZoomIn}
           size="sm"
@@ -77,6 +79,7 @@ export function TimelineToolbar({
           +
         </Button>
         <Button
+          aria-label="Pan timeline left"
           disabled={!canPan}
           onClick={onPanLeft}
           size="sm"
@@ -85,6 +88,7 @@ export function TimelineToolbar({
           ←
         </Button>
         <Button
+          aria-label="Pan timeline right"
           disabled={!canPan}
           onClick={onPanRight}
           size="sm"
