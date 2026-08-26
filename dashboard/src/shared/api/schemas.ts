@@ -238,6 +238,45 @@ export type FindingsListPayload = {
   has_next: boolean;
 };
 
+export type SettingsValues = {
+  threshold_s: number;
+  interval_s: number;
+  buffer_size: number;
+  project_root: string;
+};
+
+export type SettingsPatch = Partial<SettingsValues>;
+
+export type NumericSettingLimit = {
+  min: number;
+  max: number;
+};
+
+export type ProjectRootLimit = {
+  must_exist: boolean;
+  must_be_directory: boolean;
+};
+
+export type SettingsLimits = {
+  threshold_s: NumericSettingLimit;
+  interval_s: NumericSettingLimit;
+  buffer_size: NumericSettingLimit;
+  project_root: ProjectRootLimit;
+};
+
+export type PendingRestartSettings = Partial<
+  Pick<SettingsValues, "buffer_size" | "project_root">
+>;
+
+export type SettingsPayload = {
+  tracing: boolean;
+  persisted: boolean;
+  settings: SettingsValues;
+  pending_restart: PendingRestartSettings;
+  limits: SettingsLimits;
+  feedback: Record<FindingFeedbackKind, number>;
+};
+
 export type ApiState<T> =
   | { state: "loading"; data: null; error: null }
   | { state: "ready"; data: T; error: null }

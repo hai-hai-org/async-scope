@@ -7,6 +7,8 @@ import type {
   RequestDetailPayload,
   RequestsListPayload,
   RequestsQuery,
+  SettingsPatch,
+  SettingsPayload,
   SourceReference,
   SourceSnippetPayload,
   SummaryPayload,
@@ -30,6 +32,23 @@ export async function fetchSummary(windowS = 60): Promise<SummaryPayload> {
 
 export async function fetchExport(): Promise<ExportPayload> {
   return fetchJson<ExportPayload>(`${API_PREFIX}/export`);
+}
+
+export async function fetchSettings(): Promise<SettingsPayload> {
+  return fetchJson<SettingsPayload>(`${API_PREFIX}/settings`);
+}
+
+export async function patchSettings(
+  patch: SettingsPatch,
+): Promise<SettingsPayload> {
+  return fetchJson<SettingsPayload>(`${API_PREFIX}/settings`, {
+    body: JSON.stringify(patch),
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    method: "PATCH",
+  });
 }
 
 export async function fetchFindings(
