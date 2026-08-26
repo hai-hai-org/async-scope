@@ -106,6 +106,14 @@
   border-block-end: 1px solid var(--border-subtle);
 }
 
+.panel__header > :first-child {
+  min-inline-size: 0;
+}
+
+.panel__header .cluster {
+  justify-content: flex-end;
+}
+
 .panel__title {
   margin: 0;
   font-size: 16px;
@@ -354,8 +362,10 @@
 
 .table th,
 .table td {
+  max-inline-size: 32rem;
   padding: var(--space-3) var(--space-4);
   border-block-start: 1px solid var(--border-subtle);
+  overflow-wrap: anywhere;
   text-align: start;
   vertical-align: top;
 }
@@ -386,12 +396,20 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  max-inline-size: 100%;
   min-block-size: 24px;
   padding: 0 var(--space-2);
   border: 1px solid var(--border-default);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 650;
+}
+
+.badge span:last-child {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge--observed {
@@ -739,6 +757,7 @@
   display: grid;
   gap: var(--space-1);
   inline-size: 100%;
+  min-block-size: var(--control-md);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1008,6 +1027,7 @@
   display: grid;
   gap: var(--space-1);
   inline-size: 100%;
+  min-block-size: var(--control-md);
   padding: 0;
   border: 0;
   background: transparent;
@@ -1547,6 +1567,23 @@
 
   .settings-save-actions .button {
     inline-size: 100%;
+  }
+
+  .panel__header,
+  .drawer-header,
+  .request-detail__header,
+  .request-inspector__header,
+  .time-distribution__header {
+    flex-direction: column;
+  }
+
+  .panel__header .cluster,
+  .panel__header .button {
+    inline-size: 100%;
+  }
+
+  .button--sm {
+    min-block-size: var(--control-touch);
   }
 
   .requests-filters,

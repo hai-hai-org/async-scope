@@ -14,7 +14,10 @@ export function RequestsTable({
   selectedRequestId,
 }: RequestsTableProps) {
   return (
-    <div className="table-wrap requests-table-wrap">
+    <section
+      aria-label="Requests table scroll area"
+      className="table-wrap requests-table-wrap"
+    >
       <table className="table requests-table">
         <caption>Requests</caption>
         <thead>
@@ -83,7 +86,7 @@ export function RequestsTable({
           )}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }
 

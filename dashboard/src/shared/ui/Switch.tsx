@@ -1,4 +1,5 @@
 import * as SwitchPrimitive from "@radix-ui/react-switch";
+import { useId } from "react";
 
 type SwitchProps = {
   checked: boolean;
@@ -15,7 +16,7 @@ export function Switch({
   label,
   onCheckedChange,
 }: SwitchProps) {
-  const id = `switch-${label.replaceAll(/\s+/g, "-").toLowerCase()}`;
+  const id = useId();
 
   return (
     <div className="switch-field">

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import type {
   TimelineModel,
   TimelineSegment,
@@ -29,6 +29,7 @@ export function TimelinePlot({
   selectedSegmentId,
   viewport,
 }: TimelinePlotProps) {
+  const timelineHelpId = useId();
   const ticks = useMemo(
     () =>
       Array.from({ length: TICK_COUNT }, (_, index) => {
@@ -60,7 +61,11 @@ export function TimelinePlot({
 
   return (
     <div className="timeline-region">
-      <section className="timeline-reel" aria-label="Timeline plot">
+      <section
+        aria-describedby={timelineHelpId}
+        aria-label="Timeline plot"
+        className="timeline-reel"
+      >
         <div className="timeline-axis" aria-hidden="true">
           <div className="timeline-axis__labels">
             {ticks.map((tick) => (
@@ -90,7 +95,13 @@ export function TimelinePlot({
 
         <div className="timeline-rows">
           {model.rows.map((row) => (
-            <article className="timeline-row" key={row.id}>
+            <article
+              aria-label={`${row.label}, ${row.status}, ${formatDuration(
+                row.durationNs,
+              )}, ${row.eventCount} events`}
+              className="timeline-row"
+              key={row.id}
+            >
               <div className="timeline-row__label">
                 <strong className="truncate" title={row.label}>
                   {row.label}
@@ -125,6 +136,10 @@ export function TimelinePlot({
         </div>
       </section>
 
+      <p className="sr-only" id={timelineHelpId}>
+        타임라인은 가로로 스크롤할 수 있습니다. Tab으로 각 segment에 이동하고
+        Enter 또는 Space로 선택합니다.
+      </p>
       <ScreenReaderEvents model={model} />
     </div>
   );

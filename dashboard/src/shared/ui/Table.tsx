@@ -24,7 +24,7 @@ export function Table<T>({
   selectedId,
 }: TableProps<T>) {
   return (
-    <div className="table-wrap">
+    <section aria-label={`${caption} table scroll area`} className="table-wrap">
       <table className="table">
         <caption>{caption}</caption>
         <thead>
@@ -55,6 +55,6 @@ export function Table<T>({
           )}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }
