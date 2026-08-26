@@ -10,7 +10,13 @@ import {
   DEFAULT_FINDINGS_QUERY,
   useFindings,
 } from "../../shared/api/useFindings";
-import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
+import {
+  Button,
+  EmptyState,
+  Panel,
+  StatusBadge,
+  Tooltip,
+} from "../../shared/ui";
 import { FindingDetail } from "./FindingDetail";
 import { FindingsTable } from "./FindingsTable";
 import { useFindingDetail } from "./useFindingDetail";
@@ -27,7 +33,12 @@ const FINDING_TYPES: FindingType[] = ["blocking", "long_wait", "unattributed"];
 const FINDING_SEVERITIES: FindingSeverity[] = ["high", "medium", "low"];
 const FINDING_EVIDENCES: Evidence[] = ["observed", "inferred"];
 
-export function AnalyzerPage() {
+export function AnalyzerPage({
+  reloadToken = 0,
+}: {
+  /** 헤더의 버퍼 비우기처럼 이 페이지 밖에서 데이터가 통째로 바뀌었다는 신호다. */
+  reloadToken?: number;
+} = {}) {
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(
     () => findingIdFromHash(),
   );
@@ -36,7 +47,7 @@ export function AnalyzerPage() {
     draftFromQuery(query),
   );
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
-  const findings = useFindings(query);
+  const findings = useFindings(query, reloadToken);
   const detail = useFindingDetail(selectedFindingId);
 
   useEffect(() => {
@@ -89,9 +100,17 @@ export function AnalyzerPage() {
               <StatusBadge icon="!" tone="inferred">
                 {findings.state.data?.total ?? 0} findings
               </StatusBadge>
-              <Button onClick={findings.reload} size="sm" variant="ghost">
-                새로 고침
-              </Button>
+              <Tooltip label="새로고침">
+                <Button
+                  aria-label="새로고침"
+                  className="button--icon"
+                  onClick={findings.reload}
+                  size="sm"
+                  variant="ghost"
+                >
+                  ↻
+                </Button>
+              </Tooltip>
             </>
           }
           title="발견된 문제"
@@ -208,7 +227,7 @@ function FindingsFilters({
           <option value={100}>100</option>
         </select>
       </label>
-      <Button size="sm" type="submit" variant="primary">
+      <Button type="submit" variant="primary">
         적용
       </Button>
     </form>

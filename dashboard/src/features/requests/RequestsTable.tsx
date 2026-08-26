@@ -30,6 +30,8 @@ export function RequestsTable({
     {
       key: "request",
       header: "요청",
+      headerAlign: "center",
+      width: "220px",
       sortKey: "path",
       render: (request) => (
         <button
@@ -49,7 +51,8 @@ export function RequestsTable({
     {
       key: "status",
       header: "상태",
-      width: "138px",
+      headerAlign: "center",
+      width: "112px",
       sortKey: "status",
       render: (request) => (
         <StatusBadge
@@ -63,8 +66,8 @@ export function RequestsTable({
     {
       key: "duration",
       header: "소요 시간",
+      headerAlign: "center",
       width: "112px",
-      align: "end",
       numeric: true,
       sortKey: "duration_ns",
       render: (request) => formatDuration(request.duration_ns),
@@ -72,8 +75,8 @@ export function RequestsTable({
     {
       key: "started",
       header: "시작 시각",
+      headerAlign: "center",
       width: "148px",
-      align: "end",
       numeric: true,
       sortKey: "started_at_ns",
       render: (request) => formatWallClock(request.started_at_ns, clockAnchor),
@@ -81,14 +84,15 @@ export function RequestsTable({
     {
       key: "events",
       header: "이벤트",
+      headerAlign: "center",
       width: "84px",
-      align: "end",
       numeric: true,
       render: (request) => request.event_count,
     },
     {
       key: "flags",
       header: "특이 사항",
+      headerAlign: "center",
       width: "156px",
       render: (request) => <Flags request={request} />,
     },
@@ -97,6 +101,7 @@ export function RequestsTable({
   return (
     <Table
       caption="요청 목록"
+      className="requests-table-wrap"
       columns={columns}
       emptyMessage="표시할 요청이 없습니다."
       getRowId={(request) => request.request_id}

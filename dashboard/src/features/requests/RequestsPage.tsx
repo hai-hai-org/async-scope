@@ -6,7 +6,13 @@ import type {
   RequestStatus,
   RequestsQuery,
 } from "../../shared/api/schemas";
-import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
+import {
+  Button,
+  EmptyState,
+  Panel,
+  StatusBadge,
+  Tooltip,
+} from "../../shared/ui";
 import { RequestDetailPanel } from "../request-detail/RequestDetailPanel";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { RequestsTable } from "./RequestsTable";
@@ -31,8 +37,11 @@ const REQUEST_STATUSES: RequestStatus[] = [
 
 export function RequestsPage({
   clockAnchor,
+  reloadToken = 0,
 }: {
   clockAnchor: ClockAnchor | null;
+  /** 헤더의 버퍼 비우기처럼 이 페이지 밖에서 데이터가 통째로 바뀌었다는 신호다. */
+  reloadToken?: number;
 }) {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     () => requestIdFromHash(),
@@ -41,7 +50,7 @@ export function RequestsPage({
   const [draft, setDraft] = useState<RequestsDraft>(() =>
     draftFromQuery(query),
   );
-  const requests = useRequests(query);
+  const requests = useRequests(query, reloadToken);
   const detail = useRequestDetail({
     requestId: selectedRequestId,
   });
@@ -88,12 +97,20 @@ export function RequestsPage({
               <StatusBadge icon="≡" tone="observed">
                 {requests.state.data?.total ?? 0} requests
               </StatusBadge>
-              <Button onClick={requests.reload} size="sm" variant="ghost">
-                새로 고침
-              </Button>
+              <Tooltip label="새로고침">
+                <Button
+                  aria-label="새로고침"
+                  className="button--icon"
+                  onClick={requests.reload}
+                  size="sm"
+                  variant="ghost"
+                >
+                  ↻
+                </Button>
+              </Tooltip>
             </>
           }
-          title="요청 목록"
+          title="Requests"
         >
           <RequestsFilters
             draft={draft}
@@ -199,7 +216,7 @@ function RequestsFilters({
           <option value={100}>100</option>
         </select>
       </label>
-      <Button size="sm" type="submit" variant="primary">
+      <Button type="submit" variant="primary">
         적용
       </Button>
     </form>

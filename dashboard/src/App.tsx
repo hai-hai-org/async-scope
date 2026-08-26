@@ -5,7 +5,11 @@ import { AnalyzerPage } from "./features/analyzer/AnalyzerPage";
 import { RequestsPage } from "./features/requests/RequestsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { TimelinePage } from "./features/timeline/TimelinePage";
-import { fetchExport, fetchSummary } from "./shared/api/client";
+import {
+  clearBuffer as clearBufferApi,
+  fetchExport,
+  fetchSummary,
+} from "./shared/api/client";
 import { type ClockAnchor, clockAnchorFrom } from "./shared/api/eventStore";
 import type {
   ApiState,
@@ -27,6 +31,14 @@ export default function App() {
   const summaryData = payloadOf(summary.state);
   const exportData = payloadOf(exportState);
   const reload = () => setReloadToken((token) => token + 1);
+  // 서버 buffer를 비운 뒤 summary·export를 즉시 다시 읽는다 — 다음 폴링(2초)까지
+  // 기다리면 방금 비웠는데도 화면에 옛 값이 잠깐 남아 "안 비워졌나?" 하게 된다.
+  // Timeline 자체 스트림은 서버가 보내는 gap(§TimelinePage handleGap)으로
+  // 알아서 다시 붙는다 — 여기서 그 페이지의 상태까지 알 필요가 없다.
+  const clearBuffer = async () => {
+    await clearBufferApi();
+    reload();
+  };
   const status =
     route === "timeline" && timelineClientStatus
       ? timelineClientStatus
@@ -48,6 +60,7 @@ export default function App() {
       activeRoute={route}
       bufferSource={summaryData?.buffer.source ?? exportData?.buffer.source}
       isLightTheme={isLightTheme}
+      onClearBuffer={clearBuffer}
       onThemeChange={setIsLightTheme}
       status={status}
       statusReason={summaryData?.status_reason}
@@ -58,6 +71,7 @@ export default function App() {
         onClientStatusChange: setTimelineClientStatus,
         onRetry: reload,
         onThemeChange: setIsLightTheme,
+        reloadToken,
         summary,
       })}
     </AppShell>
@@ -70,15 +84,23 @@ type RouteContext = {
   onClientStatusChange: (status: ClientStatus | null) => void;
   onRetry: () => void;
   onThemeChange: (light: boolean) => void;
+  /** 버퍼 비우기 등 페이지 밖에서 일어난 변경을 알리는 신호. 값 자체는 의미가
+   * 없고 바뀌었다는 사실만 쓴다 — 각 페이지의 데이터 hook에 그대로 흘려보낸다. */
+  reloadToken: number;
   summary: SummaryState;
 };
 
 function renderRoute(route: RouteKey, context: RouteContext) {
   if (route === "requests") {
-    return <RequestsPage clockAnchor={context.summary.anchor} />;
+    return (
+      <RequestsPage
+        clockAnchor={context.summary.anchor}
+        reloadToken={context.reloadToken}
+      />
+    );
   }
   if (route === "analyzer") {
-    return <AnalyzerPage />;
+    return <AnalyzerPage reloadToken={context.reloadToken} />;
   }
   if (route === "settings") {
     return (

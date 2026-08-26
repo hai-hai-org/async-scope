@@ -16,7 +16,7 @@ from ..analysis.findings import get_finding, query_findings
 from ..analysis.metrics import DEFAULT_WINDOW_S, summarize
 from ..analysis.requests import get_request_detail, query_requests
 from ..config import apply_settings_patch, settings_payload, settings_state
-from ..export import buffer_metadata, export_payload, replay_into
+from ..export import buffer_metadata, clear_buffer, export_payload, replay_into
 from ..source import read_snippet
 from .sse import handle_sse
 
@@ -29,6 +29,7 @@ SUMMARY_PATH = f"{API_PREFIX}/summary"
 SETTINGS_PATH = f"{API_PREFIX}/settings"
 EXPORT_PATH = f"{API_PREFIX}/export"
 REPLAY_PATH = f"{API_PREFIX}/replay"
+CLEAR_PATH = f"{API_PREFIX}/buffer/clear"
 
 # snippet은 화면에 붙는 문맥이지 파일 뷰어가 아니다.
 MAX_RADIUS = 50
@@ -54,6 +55,9 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
         return True
     if path == REPLAY_PATH:
         await _handle_replay(app_scope.buffer, method, receive, send)
+        return True
+    if path == CLEAR_PATH:
+        await _handle_clear(app_scope.buffer, method, send)
         return True
     # /findings/<id>/feedback은 detail 분기(/findings/<id>)보다 먼저 걸러야 한다.
     if (feedback_id := _feedback_id(path)) is not None:
@@ -273,6 +277,14 @@ async def _handle_replay(buffer, method: str, receive, send) -> None:
         await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
         return
     await _json_response(send, 200, payload)
+
+
+async def _handle_clear(buffer, method: str, send) -> None:
+    """버퍼를 비운다. body가 없으므로 `_json_body`로 읽을 게 없다 — POST 확인만 한다."""
+    if method != "POST":
+        await _json_response(send, 405, {"error": "method_not_allowed"})
+        return
+    await _json_response(send, 200, clear_buffer(buffer))
 
 
 async def _guarded(send, query) -> None:

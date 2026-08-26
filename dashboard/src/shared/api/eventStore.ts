@@ -29,6 +29,8 @@ export type TimelineSegment = {
   confidence: number | null;
   source: SourceLocation | null;
   truncated: boolean;
+  /** 같은 행 안에서 시간이 겹치는 segment를 쌓아 올릴 세로 칸. layoutLanes가 매긴다. */
+  lane: number;
 };
 
 export type TimelineRow = {
@@ -291,7 +293,7 @@ function buildRequestRow(
     end?.timestamp_ns ?? Math.max(...events.map((event) => event.timestamp_ns));
   const startNs = start.timestamp_ns;
   const baseLabel = `${start.method ?? "GET"} ${start.path ?? requestId}`;
-  const segments = [
+  const segments = layoutLanes([
     ...coroutineSegments(requestId, events, startNs, endNs),
     ...responseSegments(requestId, events, endNs),
     ...loopSegments
@@ -299,7 +301,7 @@ function buildRequestRow(
         overlaps(segment.startNs, segment.endNs, startNs, endNs),
       )
       .map((segment) => ({ ...segment, rowId: requestId })),
-  ].sort((a, b) => a.startNs - b.startNs);
+  ]);
 
   return {
     id: requestId,
@@ -593,17 +595,19 @@ function backgroundTaskRow(
     startNs: axisStartNs,
     endNs: axisEndNs,
     durationNs: axisEndNs - axisStartNs,
-    segments: taskEvents.map((event) =>
-      segment({
-        rowId: "__tasks",
-        id: `task-${event.task_id ?? event.timestamp_ns}`,
-        kind: "task",
-        label: event.label ?? event.status ?? "task",
-        startNs: event.timestamp_ns,
-        endNs: event.timestamp_ns + (event.duration_ns ?? 1_000_000),
-        event,
-        truncated: false,
-      }),
+    segments: layoutLanes(
+      taskEvents.map((event) =>
+        segment({
+          rowId: "__tasks",
+          id: `task-${event.task_id ?? event.timestamp_ns}`,
+          kind: "task",
+          label: event.label ?? event.status ?? "task",
+          startNs: event.timestamp_ns,
+          endNs: event.timestamp_ns + (event.duration_ns ?? 1_000_000),
+          event,
+          truncated: false,
+        }),
+      ),
     ),
     eventCount: taskEvents.length,
   };
@@ -641,7 +645,27 @@ function segment({
     confidence: event.confidence,
     source: event.source,
     truncated,
+    lane: 0,
   };
+}
+
+/**
+ * 시간이 겹치는 segment를 서로 다른 lane에 쌓는다(달력 뷰의 이벤트 배치와 같은
+ * 방식의 greedy interval 배정). 중첩 coroutine span은 부모가 자식을 await하는
+ * 동안 부모의 running/waiting과 자식의 running/waiting이 거의 같은 구간을
+ * 차지한다 — 한 lane에 그대로 겹치면 라벨 텍스트가 서로 겹쳐 읽을 수 없다.
+ */
+function layoutLanes(segments: TimelineSegment[]): TimelineSegment[] {
+  const ordered = [...segments].sort((a, b) => a.startNs - b.startNs);
+  const laneEndNs: number[] = [];
+  return ordered.map((seg) => {
+    let lane = laneEndNs.findIndex((endNs) => endNs <= seg.startNs);
+    if (lane === -1) {
+      lane = laneEndNs.length;
+    }
+    laneEndNs[lane] = seg.endNs;
+    return { ...seg, lane };
+  });
 }
 
 function sourceLabel(source: SourceLocation | null): string | null {

@@ -1,6 +1,12 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 
-type BadgeTone = "observed" | "inferred" | "error" | "success" | "warning";
+type BadgeTone =
+  | "observed"
+  | "inferred"
+  | "error"
+  | "success"
+  | "warning"
+  | "neutral";
 
 type StatusBadgeProps = HTMLAttributes<HTMLSpanElement> & {
   children: ReactNode;

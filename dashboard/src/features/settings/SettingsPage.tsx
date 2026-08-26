@@ -262,28 +262,30 @@ function SettingsForm({
           <h3>즉시 적용되는 항목</h3>
           <p>저장하면 곧바로 적용됩니다.</p>
         </div>
-        <SettingField
-          currentValue={`${payload.settings.threshold_s}s`}
-          error={errors.threshold_s}
-          help={rangeHelp(payload.limits.threshold_s, "seconds")}
-          id="threshold_s"
-          label="블로킹 감지 기준"
-          onChange={(value) => onChange("threshold_s", value)}
-          step="0.001"
-          type="number"
-          value={draft.threshold_s}
-        />
-        <SettingField
-          currentValue={`${payload.settings.interval_s}s`}
-          error={errors.interval_s}
-          help={rangeHelp(payload.limits.interval_s, "seconds")}
-          id="interval_s"
-          label="측정 주기"
-          onChange={(value) => onChange("interval_s", value)}
-          step="0.001"
-          type="number"
-          value={draft.interval_s}
-        />
+        <div className="settings-form__fields">
+          <SettingField
+            currentValue={`${payload.settings.threshold_s}s`}
+            error={errors.threshold_s}
+            help={rangeHelp(payload.limits.threshold_s, "seconds")}
+            id="threshold_s"
+            label="블로킹 감지 기준"
+            onChange={(value) => onChange("threshold_s", value)}
+            step="0.001"
+            type="number"
+            value={draft.threshold_s}
+          />
+          <SettingField
+            currentValue={`${payload.settings.interval_s}s`}
+            error={errors.interval_s}
+            help={rangeHelp(payload.limits.interval_s, "seconds")}
+            id="interval_s"
+            label="측정 주기"
+            onChange={(value) => onChange("interval_s", value)}
+            step="0.001"
+            type="number"
+            value={draft.interval_s}
+          />
+        </div>
       </div>
 
       <div className="settings-form__section">
@@ -291,29 +293,32 @@ function SettingsForm({
           <h3>재시작이 필요한 항목</h3>
           <p>앱을 다시 시작해야 적용됩니다. 그때까지 대기 상태로 표시됩니다.</p>
         </div>
-        <SettingField
-          currentValue={String(payload.settings.buffer_size)}
-          error={errors.buffer_size}
-          help={rangeHelp(payload.limits.buffer_size, "events")}
-          id="buffer_size"
-          label="버퍼 크기"
-          onChange={(value) => onChange("buffer_size", value)}
-          pendingValue={pendingValue(payload.pending_restart.buffer_size)}
-          step="1"
-          type="number"
-          value={draft.buffer_size}
-        />
-        <SettingField
-          currentValue={payload.settings.project_root}
-          error={errors.project_root}
-          help="이미 있는 디렉터리만 지정할 수 있습니다. 재시작 전까지 코드 열람 범위는 넓어지지 않습니다."
-          id="project_root"
-          label="프로젝트 경로"
-          onChange={(value) => onChange("project_root", value)}
-          pendingValue={pendingValue(payload.pending_restart.project_root)}
-          type="text"
-          value={draft.project_root}
-        />
+        <div className="settings-form__fields">
+          <SettingField
+            currentValue={String(payload.settings.buffer_size)}
+            error={errors.buffer_size}
+            help={rangeHelp(payload.limits.buffer_size, "events")}
+            id="buffer_size"
+            label="버퍼 크기"
+            onChange={(value) => onChange("buffer_size", value)}
+            pendingValue={pendingValue(payload.pending_restart.buffer_size)}
+            step="1"
+            type="number"
+            value={draft.buffer_size}
+          />
+          <SettingField
+            currentValue={payload.settings.project_root}
+            error={errors.project_root}
+            help="이미 있는 디렉터리만 지정할 수 있습니다. 재시작 전까지 코드 열람 범위는 넓어지지 않습니다."
+            id="project_root"
+            label="프로젝트 경로"
+            onChange={(value) => onChange("project_root", value)}
+            pendingValue={pendingValue(payload.pending_restart.project_root)}
+            type="text"
+            value={draft.project_root}
+            wide
+          />
+        </div>
       </div>
     </form>
   );
@@ -330,6 +335,7 @@ function SettingField({
   step,
   type,
   value,
+  wide,
 }: {
   currentValue: string;
   error?: string;
@@ -341,10 +347,15 @@ function SettingField({
   step?: string;
   type: "number" | "text";
   value: string;
+  wide?: boolean;
 }) {
   const inputId = `settings-${id}`;
   return (
-    <div className="settings-field">
+    <div
+      className={
+        wide ? "settings-field settings-field--wide" : "settings-field"
+      }
+    >
       <label htmlFor={inputId}>
         <span>{label}</span>
         <input

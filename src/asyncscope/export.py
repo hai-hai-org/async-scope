@@ -25,6 +25,16 @@ def replay_into(buffer, payload: dict[str, Any]) -> dict[str, Any]:
     return export_payload(buffer)
 
 
+def clear_buffer(buffer) -> dict[str, Any]:
+    """버퍼를 비우고 지금부터 새로 추적한다.
+
+    `export_payload`와 같은 모양으로 돌려줘서 클라이언트가 별도 응답 스키마 없이
+    이미 아는 `ExportPayload`로 처리할 수 있다.
+    """
+    buffer.clear()
+    return export_payload(buffer)
+
+
 def validate_replay_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         raise QueryError("replay payload must be an object")

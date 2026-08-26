@@ -13,7 +13,12 @@ export const DEFAULT_FINDINGS_QUERY: FindingsQuery = {
   page_size: 50,
 };
 
-export function useFindings(query: FindingsQuery) {
+/**
+ * externalReloadToken: 이 페이지 밖(헤더의 버퍼 비우기 등)에서 데이터가
+ * 통째로 바뀌었다는 신호다. 내부 reloadToken(이 페이지의 새로 고침 버튼)과
+ * 합쳐서 둘 중 하나만 바뀌어도 다시 읽는다.
+ */
+export function useFindings(query: FindingsQuery, externalReloadToken = 0) {
   const [reloadToken, setReloadToken] = useState(0);
   const [state, setState] = useState<FindingsState>({
     state: "loading",
@@ -21,8 +26,8 @@ export function useFindings(query: FindingsQuery) {
     error: null,
   });
   const findingsRequest = useMemo(
-    () => ({ query, reloadToken }),
-    [query, reloadToken],
+    () => ({ query, reloadToken, externalReloadToken }),
+    [query, reloadToken, externalReloadToken],
   );
 
   const lastQuery = useRef(query);

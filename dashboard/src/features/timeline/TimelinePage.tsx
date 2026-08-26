@@ -13,6 +13,7 @@ import type {
   ExportPayload,
   NormalizedEvent,
 } from "../../shared/api/schemas";
+import type { SseGapPayload } from "../../shared/api/sse";
 import { useEventStream } from "../../shared/api/useEventStream";
 import {
   Button,
@@ -170,11 +171,17 @@ export function TimelinePage({
     [isPaused],
   );
 
-  const handleGap = useCallback(() => {
+  const handleGap = useCallback((gap: SseGapPayload) => {
     setLiveEvents([]);
     setPendingEvents([]);
     setSelectedSegmentId(null);
-    setAutoScroll(false);
+    // 버퍼가 통째로 비었으면(사용자가 방금 비웠거나 대상 앱이 재시작한 경우)
+    // 놓친 걸 알려줄 게 없다 — 아래 effect가 조용히 다시 붙이므로 auto-scroll을
+    // 끌 필요가 없다. ring buffer가 오래된 이벤트만 밀어낸 진짜 gap만 사용자가
+    // 판단하도록 멈춘다.
+    if (!isBufferClearedGap(gap)) {
+      setAutoScroll(false);
+    }
   }, []);
 
   const stream = useEventStream({
@@ -182,6 +189,15 @@ export function TimelinePage({
     onEvent: handleStreamEvent,
     onGap: handleGap,
   });
+
+  // 버퍼가 비어 생긴 gap은 사용자 판단이 필요 없다 — cursor 없이 바로 다시
+  // 이어붙인다. reconnect가 gap을 지우므로 한 번 실행되면 조건이 다시
+  // 참이 되지 않는다(무한 루프 아님).
+  useEffect(() => {
+    if (stream.gap && isBufferClearedGap(stream.gap)) {
+      stream.reconnect(null);
+    }
+  }, [stream.gap, stream.reconnect]);
 
   const streamStatus = stream.status;
   const clientStatus = clientStatusFromTimeline({
@@ -275,6 +291,13 @@ export function TimelinePage({
     );
   }, [model, zoom]);
 
+  // Auto 토글과 다르다 — 계속 따라가기로 전환하지 않고 지금 한 번만 최신
+  // 구간으로 옮긴다. 과거를 살펴보다 방향을 잃었을 때 auto-follow에
+  // 갇히지 않고 그냥 "지금이 어디인지"만 확인하고 싶은 경우를 위한 것이다.
+  const jumpToNow = useCallback(() => {
+    setViewportStartNs(autoScrollStart(model, zoom));
+  }, [model, zoom]);
+
   const selectSegment = useCallback((segmentId: string) => {
     setSelectedSegmentId(segmentId);
   }, []);
@@ -311,6 +334,10 @@ export function TimelinePage({
       if (event.key === "a" || event.key === "A") {
         toggleAutoScroll();
       }
+      if (event.key === "0") {
+        event.preventDefault();
+        jumpToNow();
+      }
       // 세그먼트 안에서는 화살표가 구간 이동을 담당한다 (roving tabindex).
       // 여기서 viewport를 함께 움직이면 둘이 싸운다.
       if (isInsideSegments(event.target)) {
@@ -327,80 +354,94 @@ export function TimelinePage({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [panLeft, panRight, toggleAutoScroll, togglePause, zoomIn, zoomOut]);
+  }, [
+    jumpToNow,
+    panLeft,
+    panRight,
+    toggleAutoScroll,
+    togglePause,
+    zoomIn,
+    zoomOut,
+  ]);
 
   return (
     <div className="dashboard-page">
       <SummaryMetrics summary={summary} />
 
       <section className="timeline-layout">
-        <div className="timeline-main">
-          <Panel title="Request Timeline">
-            <TimelineToolbar
-              autoScroll={autoScroll}
-              bufferSource={bufferSource}
-              bufferedCount={pendingEvents.length}
-              canPan={viewport.durationNs < model.durationNs}
-              canReconnect={
-                streamStatus === "gap" ||
-                streamStatus === "error" ||
-                streamStatus === "disconnected"
-              }
-              canZoomIn={zoom === FIT_ALL || zoom > 0}
-              canZoomOut={zoom !== FIT_ALL && zoom < ZOOM_WINDOWS_NS.length - 1}
-              eventCount={liveEvents.length}
-              isFitAll={zoom === FIT_ALL}
-              isPaused={isPaused}
-              onPanLeft={panLeft}
-              onPanRight={panRight}
-              onReconnect={reconnect}
-              onToggleAutoScroll={toggleAutoScroll}
-              onToggleFitAll={toggleFitAll}
-              onTogglePause={togglePause}
-              onZoomIn={zoomIn}
-              onZoomOut={zoomOut}
-              streamStatus={streamStatus}
-              windowLabel={formatDuration(viewport.durationNs)}
+        <Panel title="Request Timeline">
+          <TimelineToolbar
+            autoScroll={autoScroll}
+            bufferSource={bufferSource}
+            bufferedCount={pendingEvents.length}
+            canPan={viewport.durationNs < model.durationNs}
+            canReconnect={
+              streamStatus === "gap" ||
+              streamStatus === "error" ||
+              streamStatus === "disconnected"
+            }
+            canZoomIn={zoom === FIT_ALL || zoom > 0}
+            canZoomOut={zoom !== FIT_ALL && zoom < ZOOM_WINDOWS_NS.length - 1}
+            eventCount={liveEvents.length}
+            isFitAll={zoom === FIT_ALL}
+            isPaused={isPaused}
+            onJumpToNow={jumpToNow}
+            onPanLeft={panLeft}
+            onPanRight={panRight}
+            onReconnect={reconnect}
+            onToggleAutoScroll={toggleAutoScroll}
+            onToggleFitAll={toggleFitAll}
+            onTogglePause={togglePause}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            streamStatus={streamStatus}
+            windowLabel={formatDuration(viewport.durationNs)}
+          />
+          {/* 버퍼가 비어 생긴 gap은 위 effect가 조용히 다시 붙이므로 사용자에게
+              보여줄 필요가 없다 — 진짜로 이벤트가 밀려난 경우만 알린다. */}
+          {stream.gap && !isBufferClearedGap(stream.gap) ? (
+            <div className="timeline-alert" role="alert">
+              <strong>이어지지 않은 구간이 있습니다</strong>
+              <span>
+                화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시
+                연결하면 현재 버퍼를 처음부터 읽습니다.
+              </span>
+            </div>
+          ) : null}
+          <TimelineBody
+            exportState={exportState}
+            hasRows={model.rows.length > 0}
+            onRetry={onRetry}
+          >
+            <TimelinePlot
+              clockAnchor={summary.anchor}
+              model={model}
+              onSelectSegment={selectSegment}
+              playheadNs={model.axisEndNs}
+              selectedSegmentId={selectedSegmentId}
+              viewport={viewport}
             />
-            {stream.gap ? (
-              <div className="timeline-alert" role="alert">
-                <strong>이어지지 않은 구간이 있습니다</strong>
-                <span>
-                  화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시
-                  연결하면 현재 버퍼를 처음부터 읽습니다.
-                </span>
-              </div>
-            ) : null}
-            <TimelineBody
-              exportState={exportState}
-              hasRows={model.rows.length > 0}
-              onRetry={onRetry}
-            >
-              <TimelinePlot
-                clockAnchor={summary.anchor}
-                model={model}
-                onSelectSegment={selectSegment}
-                playheadNs={model.axisEndNs}
-                selectedSegmentId={selectedSegmentId}
-                viewport={viewport}
-              />
-              {/* 범례는 플롯을 읽는 도구다. 별 panel로 떼어 두면 인스펙터
-                  자리를 빼앗고 플롯과 멀어진다. */}
-              <Legend />
-            </TimelineBody>
-          </Panel>
+            {/* 범례는 플롯을 읽는 도구다. 별 panel로 떼어 두면 인스펙터
+                자리를 빼앗고 플롯과 멀어진다. */}
+            <Legend />
+          </TimelineBody>
+        </Panel>
+
+        {/* Timeline이 전체 폭을 쓰도록 그 아래로 내렸다. 알림(무엇이 막혔고
+            어떻게 고치는가)과 상세(지금 고른 구간)는 서로 다른 질문에
+            답하므로 위아래로 쌓지 않고 나란히 둔다. */}
+        <div className="timeline-bottom-row">
+          <div className="detail-aside">
+            <RequestInspector
+              detailState={requestDetail.state}
+              onRetry={requestDetail.reload}
+              selectedSegment={selectedSegment}
+            />
+          </div>
 
           <BlockingAlert
             blockingCount={payloadOf(summary.state)?.blocking_count ?? 0}
             clockAnchor={summary.anchor}
-          />
-        </div>
-
-        <div className="detail-aside">
-          <RequestInspector
-            detailState={requestDetail.state}
-            onRetry={requestDetail.reload}
-            selectedSegment={selectedSegment}
           />
         </div>
       </section>
@@ -451,11 +492,13 @@ const LEGEND = [
     icon: "…",
     label: "Truncated",
     meaning: "화면 밖으로 이어지는 구간",
-    tone: "inferred" as const,
+    // "inferred"는 점선 테두리(evidence 신호) 전용이다 — truncated는 추론이
+    // 아니라 그냥 화면 밖으로 잘린 것이라 같은 톤을 쓰면 안 된다.
+    tone: "neutral" as const,
   },
   {
     icon: "△",
-    label: "추론값",
+    label: "Inferred",
     meaning: "점선 테두리는 관찰이 아니라 추론된 구간입니다",
     tone: "inferred" as const,
   },
@@ -597,6 +640,15 @@ function formatServerTime(value: string) {
 
 function findSegment(segments: TimelineSegment[], id: string) {
   return segments.find((segment) => segment.id === id) ?? null;
+}
+
+/**
+ * ring buffer가 오래된 이벤트만 밀어낸 gap은 first/last_sequence가 남는다.
+ * 버퍼가 통째로 비어 둘 다 없으면(사용자가 비웠거나 대상 앱이 재시작한 경우)
+ * "무엇을 놓쳤는지" 알려줄 게 없다 — 그게 이 둘을 구분하는 유일한 신호다.
+ */
+function isBufferClearedGap(gap: SseGapPayload) {
+  return gap.first_sequence == null && gap.last_sequence == null;
 }
 
 function clientStatusFromTimeline({

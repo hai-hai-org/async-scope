@@ -31,6 +31,20 @@ type TimelinePlotProps = {
 
 const TICK_COUNT = 5;
 
+// DESIGN.md §4 Timeline geometry: request row 최소 높이 68px = lane 하나(44px,
+// TimelineSegment의 44px hit area) + 위아래 여백(12px씩). lane이 늘어나면(겹치는
+// segment가 쌓이면) 그만큼 행이 자란다.
+const SEGMENT_LANE_HEIGHT = 44;
+const SEGMENT_LANE_INSET = 12;
+const ROW_MIN_BLOCK_SIZE = 68;
+
+function rowBlockSize(laneCount: number) {
+  return Math.max(
+    ROW_MIN_BLOCK_SIZE,
+    laneCount * SEGMENT_LANE_HEIGHT + SEGMENT_LANE_INSET * 2,
+  );
+}
+
 export function TimelinePlot({
   clockAnchor,
   model,
@@ -66,12 +80,19 @@ export function TimelinePlot({
     () =>
       model.rows
         .filter((row) => segmentIsVisible(row, viewport))
-        .map((row) => ({
-          row,
-          segments: row.segments.filter((segment) =>
+        .map((row) => {
+          const segments = row.segments.filter((segment) =>
             segmentIsVisible(segment, viewport),
-          ),
-        })),
+          );
+          // lane은 전체 구간 기준으로 미리 매겨져 있다(뷰포트를 바꿔도 흔들리지
+          // 않게). 행 높이는 지금 실제로 보이는 segment만 기준으로 잡는다 —
+          // 겹치는 segment가 화면 밖으로 빠지면 빈 lane까지 키울 필요가 없다.
+          const laneCount = segments.reduce(
+            (max, segment) => Math.max(max, segment.lane + 1),
+            1,
+          );
+          return { row, segments, laneCount };
+        }),
     [model.rows, viewport],
   );
   const roving = useRovingSegments(visibleRows, selectedSegmentId);
@@ -148,13 +169,14 @@ export function TimelinePlot({
               보세요.
             </p>
           ) : null}
-          {visibleRows.map(({ row, segments }, rowIndex) => (
+          {visibleRows.map(({ row, segments, laneCount }, rowIndex) => (
             <article
               aria-label={`${row.label}, ${row.status}, ${formatDuration(
                 row.durationNs,
               )}, ${row.eventCount} events`}
               className="timeline-row"
               key={row.id}
+              style={{ minBlockSize: rowBlockSize(laneCount) }}
             >
               <div className="timeline-row__label">
                 <span className="timeline-row__start">
@@ -167,7 +189,10 @@ export function TimelinePlot({
                   </span>
                 </span>
               </div>
-              <div className="timeline-row__track">
+              <div
+                className="timeline-row__track"
+                style={{ minBlockSize: rowBlockSize(laneCount) }}
+              >
                 {segments.map((segment, columnIndex) => (
                   <SegmentButton
                     active={
@@ -401,9 +426,22 @@ function SegmentButton({
   // 값이다: 18 / 488 ≈ 3.7%. 이보다 타이트하면(예: 0.5%) 폭이 0.35%인 슬리버가
   // 왼쪽 기준으로 배치되어 min-inline-size만큼 밖으로 나간다.
   const anchoredRight = offset + width >= 96;
+  // 같은 행에서 시간이 겹치는 segment는 layoutLanes(eventStore.ts)가 미리
+  // 서로 다른 lane을 매겨 둔다 — 그대로 같은 높이에 그리면 라벨 텍스트가
+  // 겹쳐 읽을 수 없다(중첩 coroutine span에서 특히 흔하다).
+  const insetBlockStart =
+    SEGMENT_LANE_INSET + segment.lane * SEGMENT_LANE_HEIGHT;
   const style = anchoredRight
-    ? { insetInlineEnd: 0, inlineSize: `${Math.max(width, 100 - offset)}%` }
-    : { insetInlineStart: `${offset}%`, inlineSize: `${width}%` };
+    ? {
+        insetBlockStart,
+        insetInlineEnd: 0,
+        inlineSize: `${Math.max(width, 100 - offset)}%`,
+      }
+    : {
+        insetBlockStart,
+        insetInlineStart: `${offset}%`,
+        inlineSize: `${width}%`,
+      };
   return (
     <button
       aria-pressed={selected}

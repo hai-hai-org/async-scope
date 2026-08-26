@@ -108,8 +108,8 @@
    * 줄바꿈 없이 들어가는 최소 폭. */
   --sidebar-compact: 160px;
   --detail-wide: 388px;
-  /* DESIGN.md §4 Timeline geometry: wide 144px, compact 120px. */
-  --timeline-label-col: 144px;
+  /* DESIGN.md §4 Timeline geometry: wide 190px, compact 150px. */
+  --timeline-label-col: 190px;
   --header-height: 60px;
   --footer-height: 44px;
 
