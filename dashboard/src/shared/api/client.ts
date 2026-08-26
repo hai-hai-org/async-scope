@@ -1,9 +1,13 @@
 import type {
   ExportPayload,
+  FindingFeedbackKind,
+  FindingPayload,
+  FindingsListPayload,
+  FindingsQuery,
   RequestDetailPayload,
   RequestsListPayload,
   RequestsQuery,
-  SourceLocation,
+  SourceReference,
   SourceSnippetPayload,
   SummaryPayload,
 } from "./schemas";
@@ -28,6 +32,39 @@ export async function fetchExport(): Promise<ExportPayload> {
   return fetchJson<ExportPayload>(`${API_PREFIX}/export`);
 }
 
+export async function fetchFindings(
+  query: FindingsQuery,
+): Promise<FindingsListPayload> {
+  return fetchJson<FindingsListPayload>(
+    `${API_PREFIX}/findings?${findingQueryString(query)}`,
+  );
+}
+
+export async function fetchFindingDetail(
+  findingId: string,
+): Promise<FindingPayload> {
+  return fetchJson<FindingPayload>(
+    `${API_PREFIX}/findings/${encodeURIComponent(findingId)}`,
+  );
+}
+
+export async function postFindingFeedback(
+  findingId: string,
+  kind: FindingFeedbackKind,
+): Promise<FindingPayload> {
+  return fetchJson<FindingPayload>(
+    `${API_PREFIX}/findings/${encodeURIComponent(findingId)}/feedback`,
+    {
+      body: JSON.stringify({ kind }),
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+}
+
 export async function fetchRequests(
   query: RequestsQuery,
 ): Promise<RequestsListPayload> {
@@ -45,7 +82,7 @@ export async function fetchRequestDetail(
 }
 
 export async function fetchSourceSnippet(
-  source: SourceLocation,
+  source: SourceReference,
   radius = 5,
 ): Promise<SourceSnippetPayload> {
   const params = new URLSearchParams({
@@ -54,6 +91,26 @@ export async function fetchSourceSnippet(
     radius: String(radius),
   });
   return fetchJson<SourceSnippetPayload>(`${API_PREFIX}/source?${params}`);
+}
+
+function findingQueryString(query: FindingsQuery) {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    page_size: String(query.page_size),
+  });
+  if (query.type) {
+    params.set("type", query.type);
+  }
+  if (query.severity) {
+    params.set("severity", query.severity);
+  }
+  if (query.evidence) {
+    params.set("evidence", query.evidence);
+  }
+  if (query.request_id) {
+    params.set("request_id", query.request_id);
+  }
+  return params.toString();
 }
 
 function requestQueryString(query: RequestsQuery) {

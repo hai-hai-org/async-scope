@@ -416,6 +416,11 @@
   color: var(--status-success);
 }
 
+.badge--warning {
+  border-color: color-mix(in srgb, var(--status-warning) 70%, var(--border-default));
+  color: var(--status-warning);
+}
+
 .empty-state {
   display: grid;
   justify-items: start;
@@ -942,6 +947,261 @@
   color: var(--text-primary);
 }
 
+.analyzer-page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.analyzer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.findings-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr)) auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-block-end: var(--space-4);
+}
+
+.findings-filters label {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.findings-filters select {
+  min-block-size: var(--control-md);
+  min-inline-size: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.findings-filters select:focus-visible,
+.analyzer-table__select:focus-visible,
+.recommendation-steps .button:focus-visible,
+.affected-requests a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.findings-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.analyzer-table-wrap {
+  min-inline-size: 0;
+}
+
+.analyzer-table__select {
+  display: grid;
+  gap: var(--space-1);
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.analyzer-table__select .truncate {
+  max-inline-size: 300px;
+}
+
+.finding-detail {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.finding-detail__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.finding-detail__header h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.finding-notice {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  color: var(--text-secondary);
+}
+
+.finding-notice strong {
+  color: var(--status-warning);
+}
+
+.finding-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+
+.finding-feedback p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.finding-feedback__error {
+  inline-size: 100%;
+  color: var(--status-error);
+}
+
+.finding-detail__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.finding-detail__main,
+.finding-card {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.finding-card {
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+
+.finding-card__header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.finding-card__header p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.finding-card__body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.finding-kv {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.finding-kv div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.finding-kv dt {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.finding-kv dd {
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.affected-requests,
+.recommendation-steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.affected-requests a {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.affected-requests a:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.affected-requests strong {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.affected-requests span:last-child {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.recommendation-steps {
+  counter-reset: recommendation-step;
+}
+
+.recommendation-steps li {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  counter-increment: recommendation-step;
+}
+
+.recommendation-steps li::before {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  content: "step " counter(recommendation-step);
+}
+
+.recommendation-steps p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
 .request-inspector {
   display: grid;
   gap: var(--space-5);
@@ -1067,6 +1327,15 @@
   .requests-filters {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .analyzer-layout,
+  .finding-detail__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .findings-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 767px) {
@@ -1075,12 +1344,25 @@
   }
 
   .requests-filters,
+  .findings-filters,
   .request-detail__flow-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .requests-filters .button {
+  .requests-filters .button,
+  .findings-filters .button {
     inline-size: 100%;
+  }
+
+  .finding-detail__header,
+  .finding-feedback,
+  .finding-card__header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .affected-requests a {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .timeline-toolbar {

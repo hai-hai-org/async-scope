@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type BadgeTone = "observed" | "inferred" | "error" | "success";
+type BadgeTone = "observed" | "inferred" | "error" | "success" | "warning";
 
 type StatusBadgeProps = {
   children: ReactNode;
