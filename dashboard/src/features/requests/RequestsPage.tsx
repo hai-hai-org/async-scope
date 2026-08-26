@@ -88,29 +88,19 @@ export function RequestsPage() {
 
   return (
     <div className="dashboard-page requests-page">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Issue #65</p>
-          <h2>Requests</h2>
-          <p>
-            request list에서 검색·filter·sort·pagination으로 대상을 찾고, 같은
-            request detail flow로 span과 source를 탐색한다.
-          </p>
-        </div>
-        <StatusBadge icon="R" tone="observed">
-          {requests.state.data?.total ?? 0} requests
-        </StatusBadge>
-      </section>
-
       <section className="requests-layout">
         <Panel
           actions={
-            <Button onClick={requests.reload} size="sm" variant="ghost">
-              Refresh
-            </Button>
+            <>
+              <StatusBadge icon="≡" tone="observed">
+                {requests.state.data?.total ?? 0} requests
+              </StatusBadge>
+              <Button onClick={requests.reload} size="sm" variant="ghost">
+                새로 고침
+              </Button>
+            </>
           }
-          description="내부 API의 query contract를 그대로 사용한다."
-          title="Request list"
+          title="요청 목록"
         >
           <RequestsFilters
             draft={draft}
@@ -129,8 +119,8 @@ export function RequestsPage() {
         <div className="requests-detail-desktop">
           <RequestDetailPanel
             detailState={detail.state}
-            emptyDescription="Requests table에서 row를 선택하면 detail을 표시한다."
-            emptyTitle="선택된 request 없음"
+            emptyDescription="목록에서 요청을 선택하면 상세 정보가 표시됩니다."
+            emptyTitle="선택된 요청이 없습니다"
             onRetry={detail.reload}
           />
         </div>
@@ -142,17 +132,17 @@ export function RequestsPage() {
             }
             onOpenChange={setDrawerOpen}
             open={drawerOpen}
-            title="Request detail"
+            title="요청 상세"
             trigger={
               <Button disabled={!selectedRequestId} size="sm" variant="ghost">
-                Detail 열기
+                상세 보기
               </Button>
             }
           >
             <RequestDetailPanel
               detailState={detail.state}
-              emptyDescription="Requests table에서 row를 선택하면 detail을 표시한다."
-              emptyTitle="선택된 request 없음"
+              emptyDescription="목록에서 요청을 선택하면 상세 정보가 표시됩니다."
+              emptyTitle="선택된 요청이 없습니다"
               onRetry={detail.reload}
             />
           </Drawer>
@@ -180,16 +170,16 @@ function RequestsFilters({
       }}
     >
       <label>
-        <span>Search</span>
+        <span>검색</span>
         <input
           onChange={(event) => onChange({ ...draft, q: event.target.value })}
-          placeholder="path, status, library"
+          placeholder="경로, 상태, 라이브러리"
           type="search"
           value={draft.q}
         />
       </label>
       <label>
-        <span>Status</span>
+        <span>상태</span>
         <select
           onChange={(event) =>
             onChange({
@@ -199,7 +189,7 @@ function RequestsFilters({
           }
           value={draft.status}
         >
-          <option value="">all</option>
+          <option value="">전체</option>
           {REQUEST_STATUSES.map((status) => (
             <option key={status} value={status}>
               {status}
@@ -218,7 +208,7 @@ function RequestsFilters({
         />
       </label>
       <label>
-        <span>Path</span>
+        <span>경로</span>
         <input
           onChange={(event) => onChange({ ...draft, path: event.target.value })}
           placeholder="/demo"
@@ -226,33 +216,33 @@ function RequestsFilters({
         />
       </label>
       <label>
-        <span>Sort</span>
+        <span>정렬 기준</span>
         <select
           onChange={(event) =>
             onChange({ ...draft, sort: event.target.value as RequestSort })
           }
           value={draft.sort}
         >
-          <option value="started_at_ns">started</option>
-          <option value="duration_ns">duration</option>
-          <option value="status">status</option>
-          <option value="path">path</option>
+          <option value="started_at_ns">시작 시각</option>
+          <option value="duration_ns">소요 시간</option>
+          <option value="status">상태</option>
+          <option value="path">경로</option>
         </select>
       </label>
       <label>
-        <span>Order</span>
+        <span>정렬 순서</span>
         <select
           onChange={(event) =>
             onChange({ ...draft, order: event.target.value as RequestOrder })
           }
           value={draft.order}
         >
-          <option value="desc">desc</option>
-          <option value="asc">asc</option>
+          <option value="desc">내림차순</option>
+          <option value="asc">오름차순</option>
         </select>
       </label>
       <label>
-        <span>Page size</span>
+        <span>표시 개수</span>
         <select
           onChange={(event) =>
             onChange({ ...draft, page_size: Number(event.target.value) })
@@ -265,7 +255,7 @@ function RequestsFilters({
         </select>
       </label>
       <Button size="sm" type="submit" variant="primary">
-        Apply
+        적용
       </Button>
     </form>
   );
@@ -289,7 +279,7 @@ function RequestsListBody({
       <div className="panel__state" aria-busy="true">
         <span className="skeleton" />
         <span className="skeleton" style={{ inlineSize: "72%" }} />
-        <span>request 목록을 불러오는 중</span>
+        <span>요청 목록을 불러오는 중입니다.</span>
       </div>
     );
   }
@@ -298,7 +288,7 @@ function RequestsListBody({
     return (
       <EmptyState
         description={requests.state.error}
-        title="Request list unavailable"
+        title="요청 목록을 불러오지 못했습니다"
       />
     );
   }
@@ -307,8 +297,8 @@ function RequestsListBody({
     <div className="requests-list">
       {requests.state.state === "empty" ? (
         <EmptyState
-          description="검색어나 filter를 완화하거나 app request를 먼저 실행해야 한다."
-          title="검색 결과 없음"
+          description="검색어를 지우거나, 앱에 요청을 보낸 뒤 다시 확인해 보세요."
+          title="조건에 맞는 요청이 없습니다"
         />
       ) : (
         <RequestsTable
@@ -355,7 +345,7 @@ function PaginationControls({
           size="sm"
           variant="ghost"
         >
-          Previous
+          이전
         </Button>
         <Button
           disabled={!hasNext}
@@ -363,7 +353,7 @@ function PaginationControls({
           size="sm"
           variant="ghost"
         >
-          Next
+          다음
         </Button>
       </div>
     </div>

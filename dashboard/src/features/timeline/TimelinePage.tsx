@@ -1,13 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type {
-  BufferSource,
+  ApiState,
   ClientStatus,
+  ExportPayload,
   NormalizedEvent,
+  SummaryPayload,
 } from "../../shared/api/schemas";
-import type { SseStatus } from "../../shared/api/sse";
 import { useEventStream } from "../../shared/api/useEventStream";
-import { Button, Panel, StatusBadge } from "../../shared/ui";
-import { eventFixtures } from "../../test/fixtures";
+import {
+  Button,
+  EmptyState,
+  MetricCard,
+  Panel,
+  StatusBadge,
+} from "../../shared/ui";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { RequestInspector } from "./RequestInspector";
 import { TimelinePlot } from "./TimelinePlot";
@@ -25,31 +37,23 @@ import {
   ZOOM_LEVELS,
 } from "./timeline";
 
-type FixtureKey = keyof typeof eventFixtures;
-
-const fixtureLabels: Record<FixtureKey, string> = {
-  timeline: "two sleep requests",
-  blocking: "blocking",
-  unknownAwait: "unknown await",
-  adapterAwaits: "adapter awaits",
-  failureCancel: "failure/cancel",
-  disconnect: "disconnect",
-  backgroundTask: "background task",
-};
-
 type TimelinePageProps = {
-  bufferSource: BufferSource;
-  events?: NormalizedEvent[];
+  exportState: ApiState<ExportPayload>;
   onClientStatusChange?: (status: ClientStatus | null) => void;
+  onRetry?: () => void;
+  summary: ApiState<SummaryPayload>;
 };
 
 export function TimelinePage({
-  bufferSource,
-  events,
+  exportState,
   onClientStatusChange,
+  onRetry,
+  summary,
 }: TimelinePageProps) {
-  const [fixtureKey, setFixtureKey] = useState<FixtureKey>("timeline");
-  const [liveEvents, setLiveEvents] = useState<NormalizedEvent[]>(events ?? []);
+  const initialEvents = payloadOf(exportState)?.events;
+  // 출처를 모르는데 "live"로 단정하지 않는다. 끊긴 상태에서 거짓이 된다.
+  const bufferSource = payloadOf(exportState)?.buffer.source;
+  const [liveEvents, setLiveEvents] = useState<NormalizedEvent[]>([]);
   const [pendingEvents, setPendingEvents] = useState<NormalizedEvent[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -58,10 +62,8 @@ export function TimelinePage({
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
-  const isFixtureMode = events === undefined;
-  const sourceEvents = isFixtureMode ? eventFixtures[fixtureKey] : liveEvents;
   const zoomLevel = ZOOM_LEVELS[zoomIndex];
-  const model = useMemo(() => buildTimelineModel(sourceEvents), [sourceEvents]);
+  const model = useMemo(() => buildTimelineModel(liveEvents), [liveEvents]);
   const viewport = useMemo(
     () => createTimelineViewport(model, zoomLevel, viewportStartNs),
     [model, viewportStartNs, zoomLevel],
@@ -77,19 +79,21 @@ export function TimelinePage({
       ? selectedSegment.rowId
       : null;
   const requestDetail = useRequestDetail({
-    fallbackEvents: sourceEvents,
-    fetchEnabled: !isFixtureMode,
+    fallbackEvents: liveEvents,
     requestId: selectedRequestId,
   });
-  const initialCursor = useMemo(() => latestCursor(events ?? []), [events]);
+  const initialCursor = useMemo(
+    () => latestCursor(initialEvents ?? []),
+    [initialEvents],
+  );
 
   useEffect(() => {
-    if (events) {
-      setLiveEvents(events);
+    if (initialEvents) {
+      setLiveEvents(initialEvents);
       setPendingEvents([]);
       setViewportStartNs(undefined);
     }
-  }, [events]);
+  }, [initialEvents]);
 
   useEffect(() => {
     setViewportStartNs((current) =>
@@ -118,15 +122,14 @@ export function TimelinePage({
   }, []);
 
   const stream = useEventStream({
-    enabled: !isFixtureMode,
     initialCursor,
     onEvent: handleStreamEvent,
     onGap: handleGap,
   });
 
-  const streamStatus: SseStatus = isFixtureMode ? "idle" : stream.status;
+  const streamStatus = stream.status;
   const clientStatus = clientStatusFromTimeline({
-    isFixtureMode,
+    hasApiError: exportState.state === "error",
     isPaused,
     streamStatus,
   });
@@ -219,12 +222,11 @@ export function TimelinePage({
         event.preventDefault();
         zoomIn();
       }
-      if (event.key === "-") {
+      if (event.key === "-" || event.key === "_") {
         event.preventDefault();
         zoomOut();
       }
-      if (event.key.toLowerCase() === "a") {
-        event.preventDefault();
+      if (event.key === "a" || event.key === "A") {
         toggleAutoScroll();
       }
       if (event.key === "ArrowLeft") {
@@ -242,62 +244,22 @@ export function TimelinePage({
 
   return (
     <div className="dashboard-page">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Day15+16 · Issue #63</p>
-          <h2>Timeline controls와 RequestInspector</h2>
-          <p>
-            live stream을 잃지 않고 pause·zoom·pan으로 탐색하며, 선택한
-            request의 metadata와 시간 분포를 같은 event buffer에서 설명한다.
-          </p>
-        </div>
-        <div className="cluster">
-          {isFixtureMode ? (
-            (Object.keys(eventFixtures) as FixtureKey[]).map((key) => (
-              <Button
-                className={fixtureKey === key ? "is-focus" : undefined}
-                key={key}
-                onClick={() => {
-                  setFixtureKey(key);
-                  setSelectedSegmentId(null);
-                }}
-                size="sm"
-                variant={fixtureKey === key ? "primary" : "ghost"}
-              >
-                {fixtureLabels[key]}
-              </Button>
-            ))
-          ) : (
-            <StatusBadge icon="●" tone="observed">
-              export data
-            </StatusBadge>
-          )}
-        </div>
-      </section>
+      <SummaryMetrics summary={summary} />
 
-      <Panel
-        actions={
-          <StatusBadge icon="△" tone="inferred">
-            inferred uses dashed border
-          </StatusBadge>
-        }
-        description="색상 없이도 icon, label, border style로 상태와 근거를 구분한다."
-        title="Timeline"
-      >
+      <Panel title="Request Timeline">
         <TimelineToolbar
           autoScroll={autoScroll}
           bufferSource={bufferSource}
           bufferedCount={pendingEvents.length}
           canPan={viewport.durationNs < model.durationNs}
           canReconnect={
-            !isFixtureMode &&
-            (streamStatus === "gap" ||
-              streamStatus === "error" ||
-              streamStatus === "disconnected")
+            streamStatus === "gap" ||
+            streamStatus === "error" ||
+            streamStatus === "disconnected"
           }
           canZoomIn={zoomIndex < ZOOM_LEVELS.length - 1}
           canZoomOut={zoomIndex > 0}
-          eventCount={sourceEvents.length}
+          eventCount={liveEvents.length}
           isPaused={isPaused}
           onPanLeft={panLeft}
           onPanRight={panRight}
@@ -312,20 +274,26 @@ export function TimelinePage({
         />
         {stream.gap ? (
           <div className="timeline-alert" role="alert">
-            <strong>event gap</strong>
+            <strong>이어지지 않은 구간이 있습니다</strong>
             <span>
-              cursor {stream.gap.cursor ?? "none"} 이후 stream을 이어 받을 수
-              없다. Reconnect는 cursor 없이 현재 buffer를 다시 읽는다.
+              화면이 멈춘 동안 버퍼에서 밀려난 이벤트가 있습니다. 다시 연결하면
+              현재 버퍼를 처음부터 읽습니다.
             </span>
           </div>
         ) : null}
-        <TimelinePlot
-          model={model}
-          onSelectSegment={setSelectedSegmentId}
-          playheadNs={model.axisEndNs}
-          selectedSegmentId={selectedSegmentId}
-          viewport={viewport}
-        />
+        <TimelineBody
+          exportState={exportState}
+          hasRows={model.rows.length > 0}
+          onRetry={onRetry}
+        >
+          <TimelinePlot
+            model={model}
+            onSelectSegment={setSelectedSegmentId}
+            playheadNs={model.axisEndNs}
+            selectedSegmentId={selectedSegmentId}
+            viewport={viewport}
+          />
+        </TimelineBody>
       </Panel>
 
       <section className="grid grid--two">
@@ -334,26 +302,16 @@ export function TimelinePage({
           onRetry={requestDetail.reload}
           selectedSegment={selectedSegment}
         />
-        <Panel
-          description="Timeline state vocabulary를 고정한다."
-          title="Legend"
-        >
+        <Panel title="범례">
           <div className="legend-grid">
-            <StatusBadge icon="▶" tone="observed">
-              running
-            </StatusBadge>
-            <StatusBadge icon="Ⅱ" tone="observed">
-              waiting
-            </StatusBadge>
-            <StatusBadge icon="!" tone="error">
-              blocking
-            </StatusBadge>
-            <StatusBadge icon="→" tone="success">
-              response
-            </StatusBadge>
-            <StatusBadge icon="…" tone="inferred">
-              truncated
-            </StatusBadge>
+            {LEGEND.map((item) => (
+              <div className="legend-item" key={item.label}>
+                <StatusBadge icon={item.icon} tone={item.tone}>
+                  {item.label}
+                </StatusBadge>
+                <span>{item.meaning}</span>
+              </div>
+            ))}
           </div>
         </Panel>
       </section>
@@ -361,21 +319,188 @@ export function TimelinePage({
   );
 }
 
+const LEGEND = [
+  {
+    icon: "▶",
+    label: "Running",
+    meaning: "코드 실행 중",
+    tone: "observed" as const,
+  },
+  {
+    icon: "Ⅱ",
+    label: "Waiting",
+    meaning: "await로 대기 중이며 Event Loop는 다른 일을 합니다",
+    tone: "observed" as const,
+  },
+  {
+    icon: "!",
+    label: "Blocking",
+    meaning: "Event Loop가 막혀 다른 요청이 진행하지 못했습니다",
+    tone: "error" as const,
+  },
+  {
+    icon: "→",
+    label: "Response",
+    meaning: "응답 전송",
+    tone: "success" as const,
+  },
+  {
+    icon: "…",
+    label: "Truncated",
+    meaning: "화면 밖으로 이어지는 구간",
+    tone: "inferred" as const,
+  },
+  {
+    icon: "△",
+    label: "추론값",
+    meaning: "점선 테두리는 관찰이 아니라 추론된 구간입니다",
+    tone: "inferred" as const,
+  },
+];
+
+function SummaryMetrics({ summary }: { summary: ApiState<SummaryPayload> }) {
+  const data = payloadOf(summary);
+  const state = metricState(summary);
+
+  return (
+    <section className="metric-grid" aria-label="요약 지표">
+      <MetricCard
+        description="최근 60초 기준"
+        label="요청 수"
+        state={state}
+        unit="req/s"
+        value={formatNumber(data?.request_rate_per_second)}
+      />
+      <MetricCard
+        description="아직 응답이 끝나지 않은 요청"
+        label="활성 요청"
+        state={state}
+        value={data?.active_requests ?? "—"}
+      />
+      <MetricCard
+        description={`측정 표본 ${data?.loop_delay.samples ?? 0}개`}
+        label="이벤트 루프 지연 (최대)"
+        state={state}
+        tone={data?.loop_delay.max_ns ? "error" : "neutral"}
+        value={
+          data?.loop_delay.max_ns ? formatDuration(data.loop_delay.max_ns) : "—"
+        }
+      />
+      <MetricCard
+        description="임계값을 넘겨 Event Loop를 막은 구간"
+        label="블로킹 감지"
+        state={state}
+        tone={data?.blocking_count ? "error" : "neutral"}
+        unit="건"
+        value={data?.blocking_count ?? "—"}
+      />
+      <MetricCard
+        description="응답을 만든 시각"
+        label="서버 시간"
+        state={state}
+        value={data ? formatServerTime(data.server_time) : "—"}
+      />
+    </section>
+  );
+}
+
+function TimelineBody({
+  children,
+  exportState,
+  hasRows,
+  onRetry,
+}: {
+  children: ReactNode;
+  exportState: ApiState<ExportPayload>;
+  hasRows: boolean;
+  onRetry?: () => void;
+}) {
+  if (exportState.state === "loading") {
+    return (
+      <div className="panel__state" aria-busy="true">
+        <span className="skeleton" />
+        <span className="skeleton" style={{ inlineSize: "72%" }} />
+        <span>실행 기록을 불러오는 중입니다.</span>
+      </div>
+    );
+  }
+
+  if (exportState.state === "error") {
+    return (
+      <EmptyState
+        action={
+          onRetry ? (
+            <Button onClick={onRetry} size="sm" variant="secondary">
+              다시 시도
+            </Button>
+          ) : undefined
+        }
+        description="개발 서버가 실행 중인지 확인한 뒤 다시 시도하세요."
+        title="앱과 연결되지 않았습니다"
+      />
+    );
+  }
+
+  if (!hasRows) {
+    return (
+      <EmptyState
+        description="앱에 요청을 보내면 실행 흐름이 여기에 나타납니다."
+        title="요청을 기다리고 있습니다"
+      />
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function payloadOf<T>(state: ApiState<T>): T | null {
+  return state.state === "ready" || state.state === "empty" ? state.data : null;
+}
+
+function metricState(summary: ApiState<SummaryPayload>) {
+  if (summary.state === "loading") {
+    return "loading";
+  }
+  if (summary.state === "error") {
+    return "unavailable";
+  }
+  return summary.state === "empty" ? "empty" : "ready";
+}
+
+function formatNumber(value: number | null | undefined) {
+  if (value == null) {
+    return "—";
+  }
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function formatServerTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) {
+    return value;
+  }
+  return date.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 function findSegment(segments: TimelineSegment[], id: string) {
   return segments.find((segment) => segment.id === id) ?? null;
 }
 
 function clientStatusFromTimeline({
-  isFixtureMode,
+  hasApiError,
   isPaused,
   streamStatus,
 }: {
-  isFixtureMode: boolean;
+  hasApiError: boolean;
   isPaused: boolean;
-  streamStatus: SseStatus;
+  streamStatus: string;
 }): ClientStatus | null {
-  if (isFixtureMode) {
-    return null;
+  if (hasApiError) {
+    return "disconnected";
   }
   if (isPaused) {
     return "paused";

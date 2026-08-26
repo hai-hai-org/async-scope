@@ -15,25 +15,25 @@ export function RequestsTable({
 }: RequestsTableProps) {
   return (
     <section
-      aria-label="Requests table scroll area"
+      aria-label="요청 목록 스크롤 영역"
       className="table-wrap requests-table-wrap"
     >
       <table className="table requests-table">
-        <caption>Requests</caption>
+        <caption className="sr-only">요청 목록</caption>
         <thead>
           <tr>
-            <th scope="col">Request</th>
-            <th scope="col">Status</th>
-            <th scope="col">Duration</th>
-            <th scope="col">Started</th>
-            <th scope="col">Events</th>
-            <th scope="col">Flags</th>
+            <th scope="col">요청</th>
+            <th scope="col">상태</th>
+            <th scope="col">소요 시간</th>
+            <th scope="col">시작 시각</th>
+            <th scope="col">이벤트</th>
+            <th scope="col">특이 사항</th>
           </tr>
         </thead>
         <tbody>
           {requests.length === 0 ? (
             <tr>
-              <td colSpan={6}>표시할 request가 없습니다.</td>
+              <td colSpan={6}>표시할 요청이 없습니다.</td>
             </tr>
           ) : (
             requests.map((request) => (
@@ -77,7 +77,7 @@ export function RequestsTable({
                       </StatusBadge>
                     ) : null}
                     {!request.has_blocking && !request.has_unknown_await ? (
-                      <span className="field-help">none</span>
+                      <span className="field-help">없음</span>
                     ) : null}
                   </div>
                 </td>

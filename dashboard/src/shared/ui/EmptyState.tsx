@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Button } from "./Button";
 
 type EmptyStateProps = {
   action?: ReactNode;
@@ -17,11 +16,7 @@ export function EmptyState({ action, description, title }: EmptyStateProps) {
         <h3>{title}</h3>
         <p>{description}</p>
       </div>
-      {action ?? (
-        <Button size="sm" variant="ghost">
-          상태 유지
-        </Button>
-      )}
+      {action ?? null}
     </div>
   );
 }

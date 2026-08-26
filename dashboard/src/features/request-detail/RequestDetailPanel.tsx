@@ -21,6 +21,15 @@ type RequestDetailPanelProps = {
   title?: string;
 };
 
+// reference와 같은 어휘를 쓴다. 값의 의미는 바꾸지 않고 이름만 옮긴다.
+const BUCKET_LABELS: Record<TimeDistributionBucket, string> = {
+  running: "실행",
+  waiting: "대기",
+  blocking: "차단",
+  response: "응답",
+  unattributed: "미분류",
+};
+
 const BUCKETS: TimeDistributionBucket[] = [
   "running",
   "waiting",
@@ -35,7 +44,7 @@ export function RequestDetailPanel({
   emptyTitle,
   initialSource = null,
   onRetry,
-  title = "Request detail",
+  title = "요청 상세",
 }: RequestDetailPanelProps) {
   const detail = detailState.data;
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
@@ -55,7 +64,7 @@ export function RequestDetailPanel({
   if (detailState.state === "idle") {
     return (
       <Panel
-        description="request를 선택하면 실행 흐름과 source를 함께 보여 준다."
+        description="요청을 선택하면 실행 흐름과 코드 위치를 함께 보여줍니다."
         title={title}
       >
         <EmptyState description={emptyDescription} title={emptyTitle} />
@@ -66,7 +75,7 @@ export function RequestDetailPanel({
   if (detailState.state === "loading") {
     return (
       <Panel
-        description="request detail API를 불러오는 중이다."
+        description="상세 정보를 불러오는 중입니다."
         state="loading"
         title={title}
       >
@@ -87,8 +96,8 @@ export function RequestDetailPanel({
         title={title}
       >
         <EmptyState
-          description="request가 buffer에서 밀렸거나 API를 사용할 수 없는 상태일 수 있다."
-          title="Request detail unavailable"
+          description="오래된 요청이 버퍼에서 밀려났거나, 앱과 연결되지 않았을 수 있습니다."
+          title="상세 정보를 불러오지 못했습니다"
         />
       </Panel>
     );
@@ -103,17 +112,16 @@ export function RequestDetailPanel({
           </StatusBadge>
         ) : (
           <StatusBadge icon="●" tone="observed">
-            request API
+            수집됨
           </StatusBadge>
         )
       }
-      description="request metadata, 시간 분포, span tree와 safe source snippet을 함께 표시한다."
       title={title}
     >
       <div className="request-detail">
         <header className="request-detail__header">
           <div>
-            <p className="eyebrow">selected request</p>
+            <p className="eyebrow">선택한 요청</p>
             <h4>{requestTitle(detail)}</h4>
           </div>
           <StatusBadge
@@ -128,12 +136,9 @@ export function RequestDetailPanel({
         <TimeDistributionView detail={detail} />
 
         <div className="request-detail__flow-grid">
-          <section
-            aria-label="Execution Flow"
-            className="request-detail__section"
-          >
+          <section aria-label="실행 흐름" className="request-detail__section">
             <div className="request-detail__section-header">
-              <strong>Execution Flow</strong>
+              <strong>실행 흐름</strong>
               <span>{detail.spans.length} root spans</span>
             </div>
             <ExecutionFlowTree
@@ -154,11 +159,11 @@ function RequestMetadata({ detail }: { detail: RequestDetailPayload }) {
   return (
     <dl className="metadata-grid">
       <div>
-        <dt>request_id</dt>
+        <dt>요청 ID</dt>
         <dd className="mono">{detail.request.request_id}</dd>
       </div>
       <div>
-        <dt>duration</dt>
+        <dt>총 소요 시간</dt>
         <dd>
           {formatDuration(
             detail.request.duration_ns ?? detail.time_distribution.measured_ns,
@@ -166,30 +171,30 @@ function RequestMetadata({ detail }: { detail: RequestDetailPayload }) {
         </dd>
       </div>
       <div>
-        <dt>status_code</dt>
+        <dt>상태 코드</dt>
         <dd>{detail.request.status_code ?? "—"}</dd>
       </div>
       <div>
-        <dt>events</dt>
+        <dt>이벤트</dt>
         <dd>{detail.request.event_count}</dd>
       </div>
       <div>
-        <dt>spans</dt>
+        <dt>구간</dt>
         <dd>{detail.request.span_count}</dd>
       </div>
       <div>
-        <dt>tasks</dt>
+        <dt>Task</dt>
         <dd>{detail.request.task_count}</dd>
       </div>
       <div>
-        <dt>flags</dt>
+        <dt>특이 사항</dt>
         <dd>
           {detail.request.has_blocking ? "blocking" : "no blocking"} ·{" "}
           {detail.request.has_unknown_await ? "unknown await" : "known awaits"}
         </dd>
       </div>
       <div>
-        <dt>libraries</dt>
+        <dt>라이브러리</dt>
         <dd>{detail.request.libraries.join(", ") || "—"}</dd>
       </div>
     </dl>
@@ -198,11 +203,11 @@ function RequestMetadata({ detail }: { detail: RequestDetailPayload }) {
 
 function TimeDistributionView({ detail }: { detail: RequestDetailPayload }) {
   return (
-    <section aria-label="Time distribution" className="time-distribution">
+    <section aria-label="시간 분포" className="time-distribution">
       <div className="time-distribution__header">
-        <strong>TimeDistribution</strong>
+        <strong>시간 분포</strong>
         <span>
-          {detail.time_distribution.complete ? "complete" : "live/partial"} ·{" "}
+          {detail.time_distribution.complete ? "완료" : "진행 중"} ·{" "}
           {formatDuration(detail.time_distribution.measured_ns)}
         </span>
       </div>
@@ -222,7 +227,7 @@ function TimeDistributionView({ detail }: { detail: RequestDetailPayload }) {
       <dl className="time-distribution__legend">
         {BUCKETS.map((bucket) => (
           <div key={bucket}>
-            <dt>{bucket}</dt>
+            <dt>{BUCKET_LABELS[bucket]}</dt>
             <dd>{formatDuration(detail.time_distribution.buckets[bucket])}</dd>
           </div>
         ))}

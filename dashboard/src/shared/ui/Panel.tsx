@@ -51,24 +51,24 @@ function renderPanelBody(
       <div className="panel__state" aria-busy="true">
         <span className="skeleton" />
         <span className="skeleton" style={{ inlineSize: "72%" }} />
-        <span>{stateMessage ?? "데이터를 불러오는 중"}</span>
+        <span>{stateMessage ?? "불러오는 중입니다."}</span>
       </div>
     );
   }
   if (state === "empty") {
     return (
       <div className="panel__state">
-        <strong>빈 상태</strong>
-        <span>{stateMessage ?? "아직 표시할 이벤트가 없습니다."}</span>
+        <strong>표시할 데이터가 없습니다</strong>
+        <span>{stateMessage ?? "아직 수집된 이벤트가 없습니다."}</span>
       </div>
     );
   }
   if (state === "error") {
     return (
       <div className="panel__state" role="alert">
-        <strong>오류 상태</strong>
+        <strong>불러오지 못했습니다</strong>
         <span>
-          {stateMessage ?? "다시 시도할 수 있는 복구 경로가 필요합니다."}
+          {stateMessage ?? "앱이 실행 중인지 확인한 뒤 다시 시도하세요."}
         </span>
       </div>
     );

@@ -690,9 +690,21 @@
 }
 
 .legend-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-3);
+}
+
+.legend-item {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.legend-item span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  word-break: keep-all;
 }
 
 .requests-page {

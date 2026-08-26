@@ -5,7 +5,7 @@ import type { ZoomLevel } from "./timeline";
 
 type TimelineToolbarProps = {
   autoScroll: boolean;
-  bufferSource: BufferSource;
+  bufferSource?: BufferSource;
   bufferedCount: number;
   canPan: boolean;
   canReconnect: boolean;
@@ -47,7 +47,7 @@ export function TimelineToolbar({
   zoomLevel,
 }: TimelineToolbarProps) {
   return (
-    <section className="timeline-toolbar" aria-label="Timeline controls">
+    <section className="timeline-toolbar" aria-label="타임라인 조작">
       <div className="cluster">
         <Button
           aria-pressed={isPaused}
@@ -58,7 +58,7 @@ export function TimelineToolbar({
           {isPaused ? "Resume" : "Pause"}
         </Button>
         <Button
-          aria-label="Zoom out timeline"
+          aria-label="시간 범위 넓히기"
           disabled={!canZoomOut}
           onClick={onZoomOut}
           size="sm"
@@ -70,7 +70,7 @@ export function TimelineToolbar({
           {windowLabel} · {zoomLevel}x
         </span>
         <Button
-          aria-label="Zoom in timeline"
+          aria-label="시간 범위 좁히기"
           disabled={!canZoomIn}
           onClick={onZoomIn}
           size="sm"
@@ -79,7 +79,7 @@ export function TimelineToolbar({
           +
         </Button>
         <Button
-          aria-label="Pan timeline left"
+          aria-label="이전 구간 보기"
           disabled={!canPan}
           onClick={onPanLeft}
           size="sm"
@@ -88,7 +88,7 @@ export function TimelineToolbar({
           ←
         </Button>
         <Button
-          aria-label="Pan timeline right"
+          aria-label="다음 구간 보기"
           disabled={!canPan}
           onClick={onPanRight}
           size="sm"
@@ -112,9 +112,14 @@ export function TimelineToolbar({
         >
           {streamStatus}
         </StatusBadge>
-        <StatusBadge icon={bufferSource === "live" ? "●" : "↺"} tone="inferred">
-          {bufferSource}
-        </StatusBadge>
+        {bufferSource ? (
+          <StatusBadge
+            icon={bufferSource === "live" ? "●" : "↺"}
+            tone="inferred"
+          >
+            {bufferSource}
+          </StatusBadge>
+        ) : null}
         <span className="field-help">{eventCount} events</span>
         {isPaused ? (
           <StatusBadge icon="Ⅱ" tone="inferred">

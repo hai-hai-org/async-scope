@@ -15,25 +15,25 @@ export function FindingsTable({
 }: FindingsTableProps) {
   return (
     <section
-      aria-label="Findings table scroll area"
+      aria-label="문제 목록 스크롤 영역"
       className="table-wrap analyzer-table-wrap"
     >
       <table className="table analyzer-table">
-        <caption>Findings</caption>
+        <caption className="sr-only">발견된 문제</caption>
         <thead>
           <tr>
-            <th scope="col">Finding</th>
-            <th scope="col">Severity</th>
-            <th scope="col">Evidence</th>
-            <th scope="col">Duration</th>
-            <th scope="col">Detected</th>
-            <th scope="col">Feedback</th>
+            <th scope="col">문제</th>
+            <th scope="col">심각도</th>
+            <th scope="col">근거</th>
+            <th scope="col">지속 시간</th>
+            <th scope="col">감지 시각</th>
+            <th scope="col">피드백</th>
           </tr>
         </thead>
         <tbody>
           {findings.length === 0 ? (
             <tr>
-              <td colSpan={6}>표시할 finding이 없습니다.</td>
+              <td colSpan={6}>표시할 문제가 없습니다.</td>
             </tr>
           ) : (
             findings.map((finding) => (
@@ -87,7 +87,7 @@ export function FindingsTable({
                     ) : null}
                     {!finding.feedback.acknowledged &&
                     !finding.feedback.false_positive ? (
-                      <span className="field-help">none</span>
+                      <span className="field-help">없음</span>
                     ) : null}
                   </div>
                 </td>

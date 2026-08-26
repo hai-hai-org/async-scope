@@ -140,6 +140,33 @@ a {
   font-size: 12px;
 }
 
+.sidebar__footer {
+  display: grid;
+  gap: var(--space-2);
+  align-content: end;
+}
+
+.sidebar__footer-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.sidebar__snippet {
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  /* 192px sidebar에서 잘리지 않게 접는다. scroll은 좁은 rail에서 발견되지 않는다. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .nav-list {
   display: grid;
   gap: var(--space-2);
@@ -198,8 +225,21 @@ a {
   padding-block: var(--space-3);
 }
 
-.header > div:first-child {
+.header__heading {
   min-inline-size: 0;
+}
+
+.header__description {
+  max-inline-size: 68ch;
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  word-break: keep-all;
+}
+
+.header__error {
+  color: var(--status-error);
+  font-size: 12px;
 }
 
 .footer {
@@ -236,58 +276,11 @@ a {
   padding: var(--space-6);
 }
 
-.showcase {
-  display: grid;
-  gap: var(--space-6);
-  max-inline-size: 1380px;
-  margin: 0 auto;
-}
-
-.showcase-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-6);
-  align-items: end;
-}
-
-.showcase-hero h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.showcase-hero p {
-  max-inline-size: 760px;
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
-}
-
 .dashboard-page {
   display: grid;
   gap: var(--space-6);
   max-inline-size: 1440px;
   margin: 0 auto;
-}
-
-.page-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-6);
-  align-items: end;
-}
-
-.page-hero h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.page-hero p {
-  max-inline-size: 760px;
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary);
 }
 
 .header__reason {
@@ -481,8 +474,6 @@ a {
     padding: var(--space-4);
   }
 
-  .showcase-hero,
-  .page-hero,
   .grid--two,
   .grid--three {
     grid-template-columns: minmax(0, 1fr);

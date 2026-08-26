@@ -1,11 +1,20 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { downloadExport } from "../shared/api/client";
 import type { BufferSource, ClientStatus } from "../shared/api/schemas";
 import { Button, StatusBadge, Switch } from "../shared/ui";
-import { navItems, type RouteKey, titleForRoute } from "./router";
+import {
+  descriptionForRoute,
+  navItems,
+  type RouteKey,
+  titleForRoute,
+} from "./router";
+
+const REPO_URL = "https://github.com/hai-hai-org/async-scope";
+const VERSION = "0.1.0";
 
 type AppShellProps = {
   activeRoute: RouteKey;
-  bufferSource: BufferSource;
+  bufferSource?: BufferSource;
   children: ReactNode;
   isLightTheme: boolean;
   onThemeChange: (light: boolean) => void;
@@ -54,48 +63,91 @@ export function AppShell({
             ))}
           </div>
         </nav>
-        <div className="sidebar__footer">M2 dashboard · Issue #53</div>
+        <div className="sidebar__footer">
+          <p className="sidebar__footer-title">설치 방법</p>
+          <pre className="sidebar__snippet">
+            <code>
+              {"from asyncscope import AsyncScope\nAsyncScope(app).install()"}
+            </code>
+          </pre>
+          <a href={REPO_URL} rel="noreferrer" target="_blank">
+            GitHub <span aria-hidden="true">↗</span>
+          </a>
+        </div>
       </aside>
       <div className="shell-body">
         <header className="header">
-          <div>
-            <p className="eyebrow">AsyncScope dashboard</p>
+          <div className="header__heading">
             <h1 className="header__title">{titleForRoute(activeRoute)}</h1>
+            <p className="header__description">
+              {descriptionForRoute(activeRoute)}
+            </p>
             {statusReason ? (
               <p className="header__reason">{statusReason}</p>
             ) : null}
           </div>
           <div className="header__actions">
             {statusBadge(status)}
-            <StatusBadge
-              icon={bufferIcon(bufferSource)}
-              tone={bufferTone(bufferSource)}
-            >
-              {bufferSource}
-            </StatusBadge>
+            {bufferSource ? (
+              <StatusBadge
+                icon={bufferIcon(bufferSource)}
+                tone={bufferTone(bufferSource)}
+              >
+                {bufferSource}
+              </StatusBadge>
+            ) : null}
             <Switch
               checked={isLightTheme}
-              description="Dark가 기본값입니다."
-              label="Light theme"
+              description="기본값은 어두운 화면입니다."
+              label="밝은 화면"
               onCheckedChange={onThemeChange}
             />
-            <Button size="sm" variant="ghost">
-              Export
-            </Button>
+            <ExportButton />
           </div>
         </header>
         <main className="main" id="main-content">
           {children}
         </main>
         <footer className="footer">
-          <span>route navigation · summary metrics · timeline base</span>
+          <span>AsyncScope v{VERSION}</span>
           <span className="footer__links">
-            <span>색상 + label + shape</span>
-            <span>keyboard first</span>
+            <a href={REPO_URL} rel="noreferrer" target="_blank">
+              GitHub <span aria-hidden="true">↗</span>
+            </a>
           </span>
         </footer>
       </div>
     </div>
+  );
+}
+
+function ExportButton() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      await downloadExport();
+    } catch {
+      setError("내보내지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <>
+      <Button loading={pending} onClick={save} size="sm" variant="ghost">
+        JSON 내보내기
+      </Button>
+      {error ? (
+        <span className="header__error" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </>
   );
 }
 

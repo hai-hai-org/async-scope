@@ -3,7 +3,7 @@ import type { NormalizedEvent } from "./schemas";
 import { eventSourceUrl, type SseGapPayload, type SseStatus } from "./sse";
 
 type UseEventStreamOptions = {
-  enabled: boolean;
+  enabled?: boolean;
   initialCursor?: number | null;
   onEvent: (event: NormalizedEvent) => void;
   onGap: (gap: SseGapPayload) => void;
@@ -17,7 +17,7 @@ type EventStreamState = {
 };
 
 export function useEventStream({
-  enabled,
+  enabled = true,
   initialCursor = null,
   onEvent,
   onGap,

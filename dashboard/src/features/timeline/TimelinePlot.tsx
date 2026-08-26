@@ -53,8 +53,11 @@ export function TimelinePlot({
   if (model.rows.length === 0) {
     return (
       <div className="timeline-empty">
-        <strong>표시할 request가 없습니다.</strong>
-        <span>event buffer가 비어 있거나 request.start가 밀려났습니다.</span>
+        <strong>표시할 요청이 없습니다</strong>
+        <span>
+          버퍼가 비었거나, 오래된 이벤트가 밀려나 시작 지점이 남아 있지
+          않습니다.
+        </span>
       </div>
     );
   }
@@ -63,7 +66,7 @@ export function TimelinePlot({
     <div className="timeline-region">
       <section
         aria-describedby={timelineHelpId}
-        aria-label="Timeline plot"
+        aria-label="실행 타임라인"
         className="timeline-reel"
       >
         <div className="timeline-axis" aria-hidden="true">
@@ -186,7 +189,7 @@ function SegmentButton({
 
 function ScreenReaderEvents({ model }: { model: TimelineModel }) {
   return (
-    <ol className="sr-only" aria-label="Timeline event list">
+    <ol className="sr-only" aria-label="타임라인 이벤트 목록">
       {model.orderedEvents.map((event) => (
         <li key={event.sequence ?? eventKey(event)}>
           {event.type} {event.label ?? ""} {event.request_id ?? "global"}

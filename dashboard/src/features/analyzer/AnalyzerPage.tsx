@@ -79,29 +79,19 @@ export function AnalyzerPage() {
 
   return (
     <div className="dashboard-page analyzer-page">
-      <section className="page-hero">
-        <div>
-          <p className="eyebrow">Issue #67</p>
-          <h2>Analyzer</h2>
-          <p>
-            finding을 filter로 좁히고, recommendation과 source evidence까지 한
-            흐름에서 확인한다.
-          </p>
-        </div>
-        <StatusBadge icon="!" tone="inferred">
-          {findings.state.data?.total ?? 0} findings
-        </StatusBadge>
-      </section>
-
       <section className="analyzer-layout">
         <Panel
           actions={
-            <Button onClick={findings.reload} size="sm" variant="ghost">
-              Refresh
-            </Button>
+            <>
+              <StatusBadge icon="!" tone="inferred">
+                {findings.state.data?.total ?? 0} findings
+              </StatusBadge>
+              <Button onClick={findings.reload} size="sm" variant="ghost">
+                새로 고침
+              </Button>
+            </>
           }
-          description="blocking, long wait, unattributed finding을 backend query contract 그대로 조회한다."
-          title="Finding list"
+          title="발견된 문제"
         >
           <FindingsFilters
             draft={draft}
@@ -147,7 +137,7 @@ function FindingsFilters({
       }}
     >
       <label>
-        <span>Type</span>
+        <span>종류</span>
         <select
           onChange={(event) =>
             onChange({
@@ -157,7 +147,7 @@ function FindingsFilters({
           }
           value={draft.type}
         >
-          <option value="">all</option>
+          <option value="">전체</option>
           {FINDING_TYPES.map((type) => (
             <option key={type} value={type}>
               {type}
@@ -166,7 +156,7 @@ function FindingsFilters({
         </select>
       </label>
       <label>
-        <span>Severity</span>
+        <span>심각도</span>
         <select
           onChange={(event) =>
             onChange({
@@ -176,7 +166,7 @@ function FindingsFilters({
           }
           value={draft.severity}
         >
-          <option value="">all</option>
+          <option value="">전체</option>
           {FINDING_SEVERITIES.map((severity) => (
             <option key={severity} value={severity}>
               {severity}
@@ -185,7 +175,7 @@ function FindingsFilters({
         </select>
       </label>
       <label>
-        <span>Evidence</span>
+        <span>근거</span>
         <select
           onChange={(event) =>
             onChange({
@@ -195,7 +185,7 @@ function FindingsFilters({
           }
           value={draft.evidence}
         >
-          <option value="">all</option>
+          <option value="">전체</option>
           {FINDING_EVIDENCES.map((evidence) => (
             <option key={evidence} value={evidence}>
               {evidence}
@@ -204,7 +194,7 @@ function FindingsFilters({
         </select>
       </label>
       <label>
-        <span>Page size</span>
+        <span>표시 개수</span>
         <select
           onChange={(event) =>
             onChange({ ...draft, page_size: Number(event.target.value) })
@@ -217,7 +207,7 @@ function FindingsFilters({
         </select>
       </label>
       <Button size="sm" type="submit" variant="primary">
-        Apply
+        적용
       </Button>
     </form>
   );
@@ -241,7 +231,7 @@ function FindingsListBody({
       <div className="panel__state" aria-busy="true">
         <span className="skeleton" />
         <span className="skeleton" style={{ inlineSize: "72%" }} />
-        <span>finding 목록을 불러오는 중</span>
+        <span>분석 결과를 불러오는 중입니다.</span>
       </div>
     );
   }
@@ -250,7 +240,7 @@ function FindingsListBody({
     return (
       <EmptyState
         description={findings.state.error}
-        title="Finding list unavailable"
+        title="분석 결과를 불러오지 못했습니다"
       />
     );
   }
@@ -259,8 +249,8 @@ function FindingsListBody({
     <div className="findings-list">
       {findings.state.state === "empty" ? (
         <EmptyState
-          description="filter를 완화하거나 분석할 request를 먼저 실행해야 한다."
-          title="검색 결과 없음"
+          description="필터를 지우거나, 앱에 요청을 보낸 뒤 다시 확인해 보세요."
+          title="조건에 맞는 문제가 없습니다"
         />
       ) : (
         <FindingsTable
@@ -307,7 +297,7 @@ function PaginationControls({
           size="sm"
           variant="ghost"
         >
-          Previous
+          이전
         </Button>
         <Button
           disabled={!hasNext}
@@ -315,7 +305,7 @@ function PaginationControls({
           size="sm"
           variant="ghost"
         >
-          Next
+          다음
         </Button>
       </div>
     </div>

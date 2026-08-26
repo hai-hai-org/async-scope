@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./app/AppShell";
-import { OverviewPage } from "./app/OverviewPage";
 import { type RouteKey, routeFromHash } from "./app/router";
 import { AnalyzerPage } from "./features/analyzer/AnalyzerPage";
 import { RequestsPage } from "./features/requests/RequestsPage";
@@ -13,7 +12,6 @@ import type {
   ExportPayload,
   SummaryPayload,
 } from "./shared/api/schemas";
-import { fallbackExport, fallbackSummary } from "./test/fixtures";
 
 const THEME_STORAGE_KEY = "asyncscope.theme";
 
@@ -21,21 +19,13 @@ export default function App() {
   const [isLightTheme, setIsLightTheme] = useState(() => initialLightTheme());
   const [timelineClientStatus, setTimelineClientStatus] =
     useState<ClientStatus | null>(null);
-  const [route] = useHashRoute();
-  const summary = useSummary();
-  const exportState = useExport();
-  const summaryData =
-    summary.state === "ready" || summary.state === "empty"
-      ? summary.data
-      : null;
-  const exportData =
-    exportState.state === "ready" || exportState.state === "empty"
-      ? exportState.data
-      : fallbackExport;
-  const timelineEvents =
-    exportState.state === "ready" || exportState.state === "empty"
-      ? exportState.data.events
-      : undefined;
+  const route = useHashRoute();
+  const [reloadToken, setReloadToken] = useState(0);
+  const summary = useSummary(reloadToken);
+  const exportState = useExport(reloadToken);
+  const summaryData = payloadOf(summary);
+  const exportData = payloadOf(exportState);
+  const reload = () => setReloadToken((token) => token + 1);
   const status =
     route === "timeline" && timelineClientStatus
       ? timelineClientStatus
@@ -55,51 +45,34 @@ export default function App() {
   return (
     <AppShell
       activeRoute={route}
-      bufferSource={summaryData?.buffer.source ?? exportData.buffer.source}
+      bufferSource={summaryData?.buffer.source ?? exportData?.buffer.source}
       isLightTheme={isLightTheme}
       onThemeChange={setIsLightTheme}
       status={status}
       statusReason={summaryData?.status_reason}
     >
-      {renderRoute(
-        route,
+      {renderRoute(route, {
+        exportState,
+        isLightTheme,
+        onClientStatusChange: setTimelineClientStatus,
+        onRetry: reload,
+        onThemeChange: setIsLightTheme,
         summary,
-        exportData,
-        timelineEvents,
-        {
-          onClientStatusChange: setTimelineClientStatus,
-        },
-        {
-          isLightTheme,
-          onThemeChange: setIsLightTheme,
-        },
-      )}
+      })}
     </AppShell>
   );
 }
 
-function renderRoute(
-  route: RouteKey,
-  summary: ApiState<SummaryPayload>,
-  exportData: ExportPayload,
-  timelineEvents: ExportPayload["events"] | undefined,
-  timelineOptions: {
-    onClientStatusChange: (status: ClientStatus | null) => void;
-  },
-  themeOptions: {
-    isLightTheme: boolean;
-    onThemeChange: (light: boolean) => void;
-  },
-) {
-  if (route === "timeline") {
-    return (
-      <TimelinePage
-        bufferSource={exportData.buffer.source}
-        events={timelineEvents}
-        onClientStatusChange={timelineOptions.onClientStatusChange}
-      />
-    );
-  }
+type RouteContext = {
+  exportState: ApiState<ExportPayload>;
+  isLightTheme: boolean;
+  onClientStatusChange: (status: ClientStatus | null) => void;
+  onRetry: () => void;
+  onThemeChange: (light: boolean) => void;
+  summary: ApiState<SummaryPayload>;
+};
+
+function renderRoute(route: RouteKey, context: RouteContext) {
   if (route === "requests") {
     return <RequestsPage />;
   }
@@ -109,12 +82,23 @@ function renderRoute(
   if (route === "settings") {
     return (
       <SettingsPage
-        isLightTheme={themeOptions.isLightTheme}
-        onThemeChange={themeOptions.onThemeChange}
+        isLightTheme={context.isLightTheme}
+        onThemeChange={context.onThemeChange}
       />
     );
   }
-  return <OverviewPage summary={summary} />;
+  return (
+    <TimelinePage
+      exportState={context.exportState}
+      onClientStatusChange={context.onClientStatusChange}
+      onRetry={context.onRetry}
+      summary={context.summary}
+    />
+  );
+}
+
+function payloadOf<T>(state: ApiState<T>): T | null {
+  return state.state === "ready" || state.state === "empty" ? state.data : null;
 }
 
 function initialLightTheme() {
@@ -125,7 +109,7 @@ function initialLightTheme() {
   }
 }
 
-function useHashRoute(): [RouteKey, (route: RouteKey) => void] {
+function useHashRoute(): RouteKey {
   const [route, setRoute] = useState<RouteKey>(() =>
     routeFromHash(window.location.hash),
   );
@@ -134,28 +118,25 @@ function useHashRoute(): [RouteKey, (route: RouteKey) => void] {
     const sync = () => setRoute(routeFromHash(window.location.hash));
     window.addEventListener("hashchange", sync);
     if (!window.location.hash) {
-      window.location.replace("#/overview");
+      window.location.replace("#/timeline");
     }
     return () => window.removeEventListener("hashchange", sync);
   }, []);
 
-  const navigate = (nextRoute: RouteKey) => {
-    window.location.hash = `/${nextRoute}`;
-    setRoute(nextRoute);
-  };
-
-  return [route, navigate];
+  return route;
 }
 
-function useSummary(): ApiState<SummaryPayload> {
+function useSummary(reloadToken: number): ApiState<SummaryPayload> {
   const [summary, setSummary] = useState<ApiState<SummaryPayload>>({
     state: "loading",
     data: null,
     error: null,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken은 본문에서 읽지 않고 다시 요청하라는 신호로만 쓴다.
   useEffect(() => {
     let cancelled = false;
+    setSummary({ state: "loading", data: null, error: null });
     fetchSummary()
       .then((payload) => {
         if (cancelled) {
@@ -171,35 +152,35 @@ function useSummary(): ApiState<SummaryPayload> {
         if (cancelled) {
           return;
         }
+        // 수집값을 만들어내지 않는다. 못 읽었으면 못 읽었다고 표시한다.
         setSummary({
-          state: "ready",
-          data: {
-            ...fallbackSummary,
-            status_reason:
-              error instanceof Error
-                ? `fixture fallback: ${error.message}`
-                : "fixture fallback",
+          state: "error",
+          data: null,
+          error: {
+            code: "api_error",
+            message: error instanceof Error ? error.message : "summary failed",
           },
-          error: null,
         });
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
   return summary;
 }
 
-function useExport(): ApiState<ExportPayload> {
+function useExport(reloadToken: number): ApiState<ExportPayload> {
   const [exportState, setExportState] = useState<ApiState<ExportPayload>>({
     state: "loading",
     data: null,
     error: null,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken은 본문에서 읽지 않고 다시 요청하라는 신호로만 쓴다.
   useEffect(() => {
     let cancelled = false;
+    setExportState({ state: "loading", data: null, error: null });
     fetchExport()
       .then((payload) => {
         if (cancelled) {
@@ -227,7 +208,7 @@ function useExport(): ApiState<ExportPayload> {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
   return exportState;
 }
