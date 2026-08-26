@@ -11,9 +11,9 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 /**
- * Radix의 `asChild`(Drawer의 Trigger·Close, Tooltip의 Trigger)가 이 버튼을
- * 감싸므로 ref를 전달해야 한다. 그렇지 않으면 Radix가 실제 DOM 노드를 잡지
- * 못해 위치 계산과 포커스 관리가 조용히 어긋난다.
+ * Radix의 `asChild`(Tooltip의 Trigger)가 이 버튼을 감싸므로 ref를 전달해야
+ * 한다. 그렇지 않으면 Radix가 실제 DOM 노드를 잡지 못해 위치 계산과 포커스
+ * 관리가 조용히 어긋난다.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(

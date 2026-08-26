@@ -5,7 +5,7 @@
   gap: var(--space-2);
   min-block-size: var(--control-md);
   padding: 0 var(--space-4);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -59,7 +59,7 @@
 }
 
 .button--danger {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
+  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-strong));
   color: var(--status-error);
 }
 
@@ -72,6 +72,13 @@
 
 .button--touch {
   min-block-size: var(--control-touch);
+}
+
+/* icon만 담는 정사각형 button. 기본 .button은 텍스트 라벨 폭에 맞춰 좌우
+ * padding을 쓰므로 아이콘 하나만 넣으면 가운데가 아니라 넓적한 상자가 된다. */
+.button--icon {
+  inline-size: var(--control-sm);
+  padding-inline: 0;
 }
 
 .button__spinner {
@@ -97,10 +104,8 @@
 
 .panel {
   min-inline-size: 0;
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .panel__header {
@@ -146,24 +151,22 @@
 .metric-card {
   display: grid;
   gap: var(--space-3);
-  min-block-size: 142px;
+  min-block-size: 112px;
   padding: var(--space-4);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
-.metric-card--success {
-  border-color: color-mix(in srgb, var(--status-success) 45%, var(--border-default));
+.metric-card--success .metric-card__value {
+  color: var(--status-success);
 }
 
-.metric-card--warning {
-  border-color: color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
+.metric-card--warning .metric-card__value {
+  color: var(--status-warning);
 }
 
-.metric-card--error {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
+.metric-card--error .metric-card__value {
+  color: var(--status-error);
 }
 
 .metric-card[data-state="unavailable"] {
@@ -268,7 +271,7 @@
   flex: 0 0 auto;
   inline-size: 46px;
   block-size: 26px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: 999px;
   background: var(--surface-raised);
   cursor: pointer;
@@ -287,84 +290,32 @@
   opacity: 0.55;
 }
 
+/* Radix Thumb은 위치 스타일을 주지 않는다 — position:relative인 root 안에서
+ * static 흐름대로 놓이면 상단에 붙어 어중간해 보인다. block-start:50% +
+ * translateY(-50%)로 root의 실제 높이와 무관하게 수직 중앙에 고정하고,
+ * inline-start:0 + translateX로 트랙 안쪽 여백을 좌우 동일하게(3px) 맞춘다. */
 .switch-thumb {
-  display: block;
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0;
   inline-size: 20px;
   block-size: 20px;
   border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
-  transform: translateX(2px);
+  transform: translate(3px, -50%);
   transition: transform var(--motion-micro) var(--ease-micro);
 }
 
 .switch-thumb[data-state="checked"] {
-  transform: translateX(20px);
+  /* 트랙 content-box 44px − thumb 20px − 여백 3px */
+  transform: translate(21px, -50%);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .switch-thumb {
     transition: none;
   }
-}
-
-.drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-drawer);
-  background: rgb(0 0 0 / 50%);
-}
-
-.drawer-content {
-  position: fixed;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: calc(var(--z-drawer) + 1);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  inline-size: min(92vw, var(--detail-wide));
-  border-inline-start: 1px solid var(--border-default);
-  background: var(--surface-panel);
-  box-shadow: var(--shadow-drawer);
-  animation: drawer-in var(--motion-panel) var(--ease-panel);
-}
-
-@keyframes drawer-in {
-  from {
-    transform: translateX(8%);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .drawer-content {
-    animation: none;
-  }
-}
-
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  border-block-end: 1px solid var(--border-subtle);
-}
-
-.drawer-title {
-  margin: 0;
-  font: var(--text-h2);
-  letter-spacing: var(--tracking-h2);
-}
-
-.drawer-description {
-  margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
-}
-
-.drawer-body {
-  min-block-size: 0;
-  overflow: auto;
-  padding: var(--space-5);
 }
 
 /* P2에서 만든 --shadow-tooltip / --z-tooltip의 첫 소비처다. */
@@ -401,7 +352,7 @@
 .table-wrap {
   min-inline-size: 0;
   overflow-x: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
 }
 
@@ -512,8 +463,10 @@
   max-inline-size: 100%;
   min-block-size: 24px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: 999px;
+  /* 표면과 무관하게 얹히도록 틴트를 합성한다 — 배지는 canvas·panel·raised에 모두 놓인다. */
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
   font: var(--text-caption);
   font-weight: var(--weight-semibold);
 }
@@ -525,31 +478,38 @@
   white-space: nowrap;
 }
 
+/* 틴트 위의 텍스트는 순수 status 색으로는 4.5:1을 넘지 못한다 (실측 dark error
+ * 3.81, light success 3.51). --text-primary를 28% 섞으면 dark에서는 밝은 쪽으로,
+ * light에서는 어두운 쪽으로 움직여 양쪽 테마가 한 번에 올라간다.
+ * 다섯 배경(canvas·panel·raised·hover·선택행) 최악 dark 4.93 / light 4.89. */
 .badge--observed {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--status-info) 55%, var(--border-default));
-  color: var(--status-info);
+  background: color-mix(in srgb, var(--status-info) 14%, transparent);
+  color: color-mix(in srgb, var(--status-info) 72%, var(--text-primary));
 }
 
+/* 점선은 evidence 신호 전용이다 (DESIGN.md §5). 나머지 배지에서 윤곽선을 걷어낸
+ * 이유가 이것이다 — 전부 테두리를 두르면 이 점선이 신호로 읽히지 않는다.
+ * 신호이므로 경계 자체가 3:1을 넘어야 한다 (light에서 2.75:1이었다). */
 .badge--inferred {
   border-style: dashed;
-  border-color: color-mix(in srgb, var(--status-warning) 70%, var(--border-default));
-  color: var(--status-warning);
+  border-color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--status-warning) 72%, var(--text-primary));
 }
 
 .badge--error {
-  border-color: color-mix(in srgb, var(--status-error) 70%, var(--border-default));
-  color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 14%, transparent);
+  color: color-mix(in srgb, var(--status-error) 72%, var(--text-primary));
 }
 
 .badge--success {
-  border-color: color-mix(in srgb, var(--status-success) 70%, var(--border-default));
-  color: var(--status-success);
+  background: color-mix(in srgb, var(--status-success) 14%, transparent);
+  color: color-mix(in srgb, var(--status-success) 72%, var(--text-primary));
 }
 
 .badge--warning {
-  border-color: color-mix(in srgb, var(--status-warning) 70%, var(--border-default));
-  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--status-warning) 72%, var(--text-primary));
 }
 
 .empty-state {
@@ -557,7 +517,6 @@
   justify-items: start;
   gap: var(--space-3);
   padding: var(--space-5);
-  border: 1px dashed var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -567,8 +526,8 @@
   place-items: center;
   inline-size: 36px;
   block-size: 36px;
-  border: 1px solid var(--border-default);
   border-radius: 999px;
+  background: var(--surface-panel);
   color: var(--text-tertiary);
   font-family: var(--font-mono);
 }
@@ -591,11 +550,30 @@
   margin-block-end: var(--space-4);
 }
 
+/* 재생 제어 / 줌 / 이동, 성격이 다른 세 그룹을 divider로 나눈다.
+ * 장식용 box가 아니라 표 divider와 같은 역할의 선이다(DESIGN.md §7 (d)). */
+.timeline-toolbar__group + .timeline-toolbar__group {
+  border-inline-start: 1px solid var(--border-subtle);
+  padding-inline-start: var(--space-4);
+}
+
+/* −/구간/+처럼 한 컨트롤을 이루는 조각들을 하나의 표면으로 묶는다.
+ * border가 아니라 표면 톤으로 구분한다(DESIGN.md §7). */
+.timeline-toolbar__chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
 .timeline-toolbar__window {
-  min-inline-size: 132px;
+  min-inline-size: 104px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
   text-align: center;
+  white-space: nowrap;
 }
 
 .timeline-alert {
@@ -604,7 +582,6 @@
   gap: var(--space-3);
   margin-block-end: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-error) 55%, var(--border-default));
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--status-error) 12%, transparent);
   color: var(--text-secondary);
@@ -706,7 +683,7 @@
 .timeline-reel {
   min-inline-size: 0;
   overflow-x: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -729,9 +706,14 @@
 }
 
 .timeline-axis__labels {
-  inset-block-start: var(--space-2);
+  inset-block-start: var(--space-1);
   color: var(--text-tertiary);
   font: var(--text-code);
+  /* text-code의 line-height(1.6)는 여러 줄 코드용이다. 여기선 한 줄짜리
+   * 숫자라 그대로 쓰면 글자 아래쪽이 바로 밑 눈금(.timeline-axis__line
+   * span)과 같은 높이에 걸쳐 실측 6.8px 겹친다 — 눈금이 숫자 아랫부분을
+   * 가로질러 잘린 것처럼 보인다. 한 줄 라벨에 맞게 줄간격을 좁힌다. */
+  line-height: 1;
 }
 
 .timeline-axis__labels span,
@@ -745,8 +727,12 @@
   transform: translateX(0);
 }
 
+/* 마지막 눈금은 axisEndNs("지금")과 같은 위치라 playhead 점(10px 지름)이
+ * 바로 그 자리에 온다. 오른쪽 정렬만 하면 라벨 끝자리 숫자가 점에 가려진다
+ * (실측: "10993.18s"의 "8s"가 파란 점에 덮임). playhead 반경만큼 왼쪽으로
+ * 더 띄운다. */
 .timeline-axis__labels span:last-child {
-  transform: translateX(-100%);
+  transform: translateX(calc(-100% - var(--space-3)));
 }
 
 .timeline-axis__line {
@@ -795,8 +781,21 @@
   outline-offset: 3px;
 }
 
+/* 요청이 쌓일수록 무한정 늘어나던 것을 6행(행 최소높이 68px × 6, DESIGN.md
+ * Timeline geometry)에서 자체 스크롤로 봉쇄한다. .timeline-reel이 아니라
+ * 여기 거는 이유: .timeline-reel에 걸면 축 헤더까지 같이 스크롤되어 사라진다. */
 .timeline-rows {
   display: grid;
+  max-block-size: 408px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.timeline-rows-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-secondary);
+  text-align: center;
 }
 
 .timeline-row {
@@ -969,22 +968,15 @@
   color: var(--text-secondary);
 }
 
+/* 세로로 6줄 나열되던 걸 한 줄(좁으면 랩)로 바꿨다 — badge 이름만으로도
+ * 상태는 이미 구분되고, 긴 설명은 hover/focus 시 tooltip으로만 보인다
+ * (badge에 focusable을 켜서 키보드로도 닿는다). 위 플롯과 붙어 있던 것도
+ * 분리한다. */
 .legend-grid {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.legend-item {
-  display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.legend-item span {
-  color: var(--text-secondary);
-  font: var(--text-body-sm);
-  word-break: keep-all;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-block-start: var(--space-5);
 }
 
 .requests-page {
@@ -1033,7 +1025,7 @@
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -1095,10 +1087,6 @@
   font: var(--text-code);
 }
 
-.requests-detail-compact {
-  display: none;
-}
-
 /* DESIGN.md §4: detail inspector는 viewport 안에서 sticky이며 내부가 길 때
  * inspector body만 스크롤한다. 스크롤 조상은 .main(overflow: auto)이다.
  * Requests와 Timeline이 같은 규칙을 쓴다. */
@@ -1130,10 +1118,6 @@
   min-inline-size: 0;
 }
 
-.timeline-detail-compact {
-  display: none;
-}
-
 .request-detail {
   container: request-detail / inline-size;
   display: grid;
@@ -1159,8 +1143,8 @@
   gap: var(--space-2);
 }
 
-/* 같은 컴포넌트가 388px 인스펙터, Analyzer의 넓은 열, 전체 폭 drawer에
- * 모두 들어간다. 뷰포트가 아니라 자신이 놓인 폭으로 판단해야 한다. */
+/* 같은 컴포넌트가 388px 인스펙터와 Analyzer의 넓은 열에 모두 들어간다.
+ * 뷰포트가 아니라 자신이 놓인 폭으로 판단해야 한다. */
 .request-detail__flow-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1222,7 +1206,7 @@
   gap: var(--space-2);
   inline-size: 100%;
   padding: var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -1240,7 +1224,6 @@
 }
 
 .execution-flow__button:hover {
-  border-color: var(--border-strong);
   background: var(--surface-hover);
 }
 
@@ -1268,7 +1251,6 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border: 1px dashed var(--border-default);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-secondary);
@@ -1283,7 +1265,7 @@
   max-block-size: 420px;
   margin: 0;
   overflow: auto;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -1336,7 +1318,7 @@
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
   color: var(--text-primary);
@@ -1401,9 +1383,8 @@
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-raised));
   color: var(--text-secondary);
 }
 
@@ -1418,7 +1399,6 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -1458,7 +1438,6 @@
 
 .finding-card {
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -1518,14 +1497,13 @@
   grid-template-columns: 52px minmax(0, 1fr) auto;
   gap: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
+  background: var(--surface-panel);
   color: var(--text-primary);
   text-decoration: none;
 }
 
 .affected-requests a:hover {
-  border-color: var(--border-strong);
   background: var(--surface-hover);
 }
 
@@ -1549,7 +1527,6 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-panel);
   counter-increment: recommendation-step;
@@ -1583,10 +1560,8 @@
   gap: var(--space-3);
   min-block-size: 96px;
   padding: var(--space-4);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: var(--shadow-panel);
 }
 
 .settings-status-card > span:first-child {
@@ -1632,7 +1607,6 @@
   display: grid;
   gap: var(--space-4);
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -1661,9 +1635,8 @@
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid color-mix(in srgb, var(--status-warning) 55%, var(--border-default));
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  background: color-mix(in srgb, var(--status-warning) 14%, var(--surface-raised));
   color: var(--text-secondary);
 }
 
@@ -1672,8 +1645,7 @@
 }
 
 .settings-alert--error {
-  border-color: color-mix(in srgb, var(--status-error) 55%, var(--border-default));
-  background: color-mix(in srgb, var(--status-error) 10%, transparent);
+  background: color-mix(in srgb, var(--status-error) 14%, var(--surface-raised));
 }
 
 .settings-alert--error strong {
@@ -1697,7 +1669,7 @@
   min-block-size: var(--control-md);
   min-inline-size: 0;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface-panel);
   color: var(--text-primary);
@@ -1723,7 +1695,6 @@
 
 .settings-field__meta span {
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: var(--surface-panel);
 }
@@ -1735,19 +1706,28 @@
 
 .settings-guide {
   display: grid;
-  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* 카드로 감싸지 않는다 — 표 행과 같은 방식으로 divider로만 구분한다
+ * (DESIGN.md §7 (d)). */
 .settings-guide li {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  padding-block: var(--space-3);
+}
+
+.settings-guide li + li {
+  border-block-start: 1px solid var(--border-subtle);
+}
+
+.settings-guide li strong::before {
+  margin-inline-end: var(--space-2);
+  color: var(--text-tertiary);
+  font-weight: var(--weight-regular);
+  content: "–";
 }
 
 .settings-guide span {
@@ -1830,7 +1810,6 @@
   gap: var(--space-1);
   min-inline-size: 0;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -1871,16 +1850,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .requests-detail-desktop,
-  .timeline-detail-desktop {
-    display: none;
-  }
-
-  .requests-detail-compact,
-  .timeline-detail-compact {
-    display: block;
-  }
-
   .timeline-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1916,7 +1885,6 @@
   }
 
   .panel__header,
-  .drawer-header,
   .request-detail__header,
   .request-inspector__header,
   .time-distribution__header {

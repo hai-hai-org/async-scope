@@ -1,13 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { downloadExport } from "../shared/api/client";
 import type { BufferSource, ClientStatus } from "../shared/api/schemas";
-import {
-  Button,
-  StatusBadge,
-  Switch,
-  Tooltip,
-  TooltipProvider,
-} from "../shared/ui";
+import { Button, StatusBadge, Tooltip, TooltipProvider } from "../shared/ui";
 import {
   descriptionForRoute,
   navItems,
@@ -51,39 +45,22 @@ export function AppShell({
               </span>
               <span className="brand__text">AsyncScope</span>
             </div>
-            <span className="brand__caption">비동기 실행 관제실</span>
+            <span className="brand__caption">Make Async Visible</span>
           </div>
           <nav aria-label="Primary">
             <div className="nav-list">
               {navItems.map((item) => (
-                // icon rail(768~1279px)에서는 라벨이 화면에 없다. 이름은 sr-only
-                // 라벨이, 눈에 보이는 안내는 툴팁이 담당한다 (DESIGN.md §4).
-                <Tooltip key={item.key} label={item.label} side="right">
-                  <a
-                    aria-current={item.key === activeRoute ? "page" : undefined}
-                    className="nav-item"
-                    href={item.href}
-                  >
-                    <span aria-hidden="true" className="nav-icon">
-                      {item.icon}
-                    </span>
-                    <span className="nav-label">{item.label}</span>
-                  </a>
-                </Tooltip>
+                <a
+                  aria-current={item.key === activeRoute ? "page" : undefined}
+                  className="nav-item"
+                  href={item.href}
+                  key={item.key}
+                >
+                  <span className="nav-label">{item.label}</span>
+                </a>
               ))}
             </div>
           </nav>
-          <div className="sidebar__footer">
-            <p className="sidebar__footer-title">설치 방법</p>
-            <pre className="sidebar__snippet">
-              <code>
-                {"from asyncscope import AsyncScope\nAsyncScope(app).install()"}
-              </code>
-            </pre>
-            <a href={REPO_URL} rel="noreferrer" target="_blank">
-              GitHub <span aria-hidden="true">↗</span>
-            </a>
-          </div>
         </aside>
         <div className="shell-body">
           <header className="header">
@@ -98,7 +75,9 @@ export function AppShell({
             </div>
             <div className="header__actions">
               {statusBadge(status)}
-              {bufferSource ? (
+              {/* live일 때는 알려 줄 것이 없다 — 상태 배지가 이미 running을 말한다.
+                평상시 헤더를 비워 두고, 재생·혼합 버퍼일 때만 신호를 낸다. */}
+              {bufferSource && bufferSource !== "live" ? (
                 <StatusBadge
                   icon={bufferIcon(bufferSource)}
                   tone={bufferTone(bufferSource)}
@@ -106,14 +85,15 @@ export function AppShell({
                   {bufferSource}
                 </StatusBadge>
               ) : null}
-              {/* 헤더에서는 설명 줄을 두지 않는다. 토글 상태가 이미 보이고,
-                설명 한 줄이 좁은 폭 헤더 높이를 크게 늘린다. 안내는 Settings에 있다. */}
-              <Switch
-                checked={isLightTheme}
-                label="밝은 화면"
-                onCheckedChange={onThemeChange}
-              />
-              <ExportButton />
+              {/* 컨트롤은 따로 묶는다. 배지와 같은 wrap 컨테이너에 두면 폭에 따라
+                토글과 버튼이 서로 다른 줄로 갈라진다. */}
+              <div className="header__controls">
+                <ThemeToggle
+                  isLightTheme={isLightTheme}
+                  onChange={onThemeChange}
+                />
+                <ExportButton />
+              </div>
             </div>
           </header>
           <main className="main" id="main-content">
@@ -151,15 +131,47 @@ function ExportButton() {
 
   return (
     <>
-      <Button loading={pending} onClick={save} size="sm" variant="ghost">
-        JSON 내보내기
-      </Button>
+      <Tooltip label="현재 버퍼에 있는 이벤트 전체를 JSON 파일로 내려받습니다.">
+        <Button loading={pending} onClick={save} size="sm" variant="ghost">
+          JSON export
+        </Button>
+      </Tooltip>
       {error ? (
         <span className="header__error" role="alert">
           {error}
         </span>
       ) : null}
     </>
+  );
+}
+
+type ThemeToggleProps = {
+  isLightTheme: boolean;
+  onChange: (light: boolean) => void;
+};
+
+/**
+ * label 텍스트 없이 아이콘만으로 상태를 보인다 — 아이콘은 지금 켜져 있는 화면이
+ * 아니라 눌렀을 때 바뀔 화면을 가리킨다(기본값이 어두운 화면이므로 처음엔 해가
+ * 보이고, 누르면 밝은 화면이 되면서 달로 바뀐다). icon-only이므로 accessible
+ * name(aria-label)과 별개로 visible tooltip을 함께 둔다 (DESIGN.md §8).
+ */
+function ThemeToggle({ isLightTheme, onChange }: ThemeToggleProps) {
+  const label = isLightTheme ? "dark mode로 전환" : "light mode로 전환";
+
+  return (
+    <Tooltip label={label}>
+      <Button
+        aria-label={label}
+        aria-pressed={isLightTheme}
+        className="button--icon"
+        onClick={() => onChange(!isLightTheme)}
+        size="sm"
+        variant="ghost"
+      >
+        <span aria-hidden="true">{isLightTheme ? "☾" : "☀"}</span>
+      </Button>
+    </Tooltip>
   );
 }
 

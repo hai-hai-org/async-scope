@@ -380,13 +380,10 @@ function ThemePanel({
       <div className="settings-theme-panel">
         <Switch
           checked={isLightTheme}
-          description="기본값은 어두운 화면입니다."
-          label="밝은 화면"
+          description="기본은 dark mode예요."
+          label="Light mode"
           onCheckedChange={onThemeChange}
         />
-        <p className="field-help">
-          현재 {isLightTheme ? "밝은 화면" : "어두운 화면"}
-        </p>
       </div>
     </Panel>
   );

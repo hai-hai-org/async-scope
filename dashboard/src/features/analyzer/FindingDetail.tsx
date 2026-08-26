@@ -8,11 +8,7 @@ import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
 import { SourceViewer } from "../request-detail/SourceViewer";
 import { formatDuration, formatTimestamp } from "../timeline/timeline";
 import { severityTone } from "./FindingsTable";
-import {
-  RecommendationSteps,
-  sameSource,
-  sourceLabel,
-} from "./RecommendationSteps";
+import { RecommendationSteps, sourceLabel } from "./RecommendationSteps";
 import type { FindingDetailState } from "./useFindingDetail";
 
 type FindingDetailProps = {

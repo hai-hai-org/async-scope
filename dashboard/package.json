@@ -8,10 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "biome check src",
-    "check:tokens": "! grep -rnE 'font-size: *[0-9]+px|font-weight: *[0-9]+|z-index: *[0-9]+' src --include=*.css | grep -v 'tokens.css' | grep -v 'fonts.css'"
+    "check:tokens": "! grep -rnE 'font-size: *[0-9]+px|font-weight: *[0-9]+|z-index: *[0-9]+' src --include=*.css | grep -v 'tokens.css' | grep -v 'fonts.css'",
+    "check:surfaces": "node scripts/check-surfaces.mjs"
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.16",
     "@radix-ui/react-visually-hidden": "^1.2.3",

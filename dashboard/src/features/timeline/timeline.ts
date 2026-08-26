@@ -46,6 +46,23 @@ export function windowNsFor(model: TimelineModel, zoom: ZoomSelection): number {
   return Math.min(requested, span);
 }
 
+/**
+ * 처음 데이터가 채워질 때 한 번 쓰는 기본 줌. 데이터가 5s 안에 다 들어오면
+ * 그걸 다 담는 가장 좁은 단계, 아니면(오래 산 세션) 5s를 최신 기준으로
+ * 보여준다. FIT_ALL은 반환하지 않는다 — 그건 이제 사용자가 명시적으로
+ * 고르는 모드다. 버퍼 전체를 항상 기본값으로 압축해 보여주면, 오래 켜둔
+ * 세션에서 ms 단위 요청이 전부 같은 최소 폭 아이콘으로 뭉개진다.
+ */
+export function defaultZoomFor(model: TimelineModel): ZoomSelection {
+  const span = model.durationNs;
+  const widestIndex = ZOOM_WINDOWS_NS.length - 1;
+  if (span > ZOOM_WINDOWS_NS[widestIndex]) {
+    return widestIndex;
+  }
+  const index = ZOOM_WINDOWS_NS.findIndex((windowNs) => span <= windowNs);
+  return index < 0 ? widestIndex : index;
+}
+
 export type { TimelineModel, TimelineSegment };
 export {
   buildFallbackRequestDetail,
@@ -133,11 +150,13 @@ export function segmentWidth(
   return Math.max(0.35, percentage(endNs - startNs, viewport.durationNs));
 }
 
+/** segment뿐 아니라 row(자기 startNs/endNs를 가진 어떤 구간이든)에도 쓴다 —
+ * 좁은 창에서 row 자체가 창 밖 시간대의 요청이면 목록에서도 걸러야 한다. */
 export function segmentIsVisible(
-  segment: TimelineSegment,
+  range: { startNs: number; endNs: number },
   viewport: TimelineViewport,
 ) {
-  return segment.startNs < viewport.endNs && viewport.startNs < segment.endNs;
+  return range.startNs < viewport.endNs && viewport.startNs < range.endNs;
 }
 
 export function playheadOffset(ns: number, viewport: TimelineViewport) {

@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { SummaryState } from "../../App";
@@ -15,11 +16,11 @@ import type {
 import { useEventStream } from "../../shared/api/useEventStream";
 import {
   Button,
-  Drawer,
   EmptyState,
   MetricCard,
   Panel,
   StatusBadge,
+  Tooltip,
 } from "../../shared/ui";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { BlockingAlert } from "./BlockingAlert";
@@ -32,6 +33,7 @@ import {
   clampViewportStart,
   createTimelineViewport,
   DEFAULT_ZOOM_INDEX,
+  defaultZoomFor,
   FIT_ALL,
   formatDuration,
   latestCursor,
@@ -63,15 +65,25 @@ export function TimelinePage({
   const [pendingEvents, setPendingEvents] = useState<NormalizedEvent[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  // 처음 열면 버퍼에 있는 걸 다 보여준다. 고정 1s 창으로 시작하면 트래픽이
-  // 드문 앱에서 빈 화면이 뜬다. DESIGN.md는 5단계만 규정하고 초기값은 정하지
-  // 않으므로, "전체를 보고 좁혀 들어간다"를 기본 동작으로 둔다.
+  // 부트스트랩 값일 뿐이다. 실제 기본 줌은 데이터가 처음 도착했을 때
+  // defaultZoomFor로 한 번 계산해 아래 effect가 덮어쓴다(row가 없는 동안엔
+  // TimelinePlot이 empty-state를 먼저 그리므로 이 값이 화면에 보이지 않는다).
   const [zoom, setZoom] = useState<ZoomSelection>(FIT_ALL);
   const [viewportStartNs, setViewportStartNs] = useState<number | undefined>();
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
-  const [detailOpen, setDetailOpen] = useState(false);
+  // 기본 줌은 데이터가 처음 채워질 때 한 번만 정한다. 스트림이 계속 들어와
+  // model이 자라거나 사용자가 직접 줌을 조작한 뒤에는 다시 끼어들지 않는다.
+  const hasAppliedDefaultZoomRef = useRef(false);
+  const userAdjustedZoomRef = useRef(false);
+  // initialEvents가 아직 도착하기 전에 SSE가 낱개 이벤트를 먼저 흘려보내면
+  // model.rows가 잠깐 1개짜리로 채워진다. 그 순간을 "처음 채워진 데이터"로
+  // 오인해 defaultZoomFor를 계산하면, 뒤이어 진짜 initialEvents(버퍼 전체)가
+  // 도착해도 이미 잠긴 좁은 줌이 남는다 — 실측: 5분 넘게 퍼진 요청들인데
+  // 250ms 창에 갇혀 세그먼트가 하나도 안 보였다. initialEvents의 결론(있든
+  // 없든)이 나기 전까지는 이 fallback을 막는다.
+  const initialEventsResolvedRef = useRef(false);
   const model = useMemo(() => buildTimelineModel(liveEvents), [liveEvents]);
   const viewport = useMemo(
     () => createTimelineViewport(model, zoom, viewportStartNs),
@@ -101,8 +113,24 @@ export function TimelinePage({
       setLiveEvents(initialEvents);
       setPendingEvents([]);
       setViewportStartNs(undefined);
+      // initialEvents가 곧 "처음 채워진 데이터"의 권위 있는 스냅샷이다.
+      // 여기서 바로 계산하면 아래 fallback effect의 경쟁 상태를 피한다.
+      if (!hasAppliedDefaultZoomRef.current && !userAdjustedZoomRef.current) {
+        const initialModel = buildTimelineModel(initialEvents);
+        if (initialModel.rows.length > 0) {
+          hasAppliedDefaultZoomRef.current = true;
+          setZoom(defaultZoomFor(initialModel));
+        }
+      }
     }
-  }, [initialEvents]);
+    // "loading" 동안엔 아직 아무것도 결론나지 않은 것이다 — 이 시점에
+    // resolved로 표시하면 fallback effect가 곧바로 풀려 버려서 gate가
+    // 무력해진다("loading" → "ready"로 넘어가기 전 첫 렌더에서 effect는
+    // initialEvents 값과 무관하게 한 번 실행되기 때문이다).
+    if (exportState.state !== "loading") {
+      initialEventsResolvedRef.current = true;
+    }
+  }, [exportState.state, initialEvents]);
 
   useEffect(() => {
     setViewportStartNs((current) =>
@@ -111,6 +139,25 @@ export function TimelinePage({
         : clampViewportStart(model, zoom, current),
     );
   }, [autoScroll, model, zoom]);
+
+  // initialEvents가 끝내 비어 있었던 경우의 fallback이다 — 그때는 위
+  // initialEvents effect가 계산할 데이터가 없으므로, 첫 실시간 이벤트가
+  // 도착해 row가 처음 생기는 순간 대신 계산한다. initialEvents의 결론이
+  // 나기 전에는(=아직 무엇으로도 판단할 수 없는 사이) 절대 먼저 끼어들지
+  // 않는다 — 그 경쟁이 바로 위 effect에 남긴 주석의 실측 버그였다.
+  useEffect(() => {
+    if (hasAppliedDefaultZoomRef.current || userAdjustedZoomRef.current) {
+      return;
+    }
+    if (!initialEventsResolvedRef.current) {
+      return;
+    }
+    if (model.rows.length === 0) {
+      return;
+    }
+    hasAppliedDefaultZoomRef.current = true;
+    setZoom(defaultZoomFor(model));
+  }, [model]);
 
   const handleStreamEvent = useCallback(
     (event: NormalizedEvent) => {
@@ -178,6 +225,9 @@ export function TimelinePage({
   // 다음 effect가 최신 위치로 다시 붙이므로 굳이 계산하지 않는다.
   const applyZoom = useCallback(
     (next: ZoomSelection) => {
+      // 사용자가 직접 줌을 골랐다 — 데이터 기반 기본값 effect는 이제 다시
+      // 끼어들지 않는다.
+      userAdjustedZoomRef.current = true;
       setZoom(next);
       if (!autoScroll) {
         setViewportStartNs(
@@ -225,10 +275,8 @@ export function TimelinePage({
     );
   }, [model, zoom]);
 
-  // compact 폭에서는 drawer로 열어야 상세가 보인다.
   const selectSegment = useCallback((segmentId: string) => {
     setSelectedSegmentId(segmentId);
-    setDetailOpen(true);
   }, []);
 
   const toggleAutoScroll = useCallback(() => {
@@ -348,32 +396,12 @@ export function TimelinePage({
           />
         </div>
 
-        <div className="timeline-detail-desktop detail-aside">
+        <div className="detail-aside">
           <RequestInspector
             detailState={requestDetail.state}
             onRetry={requestDetail.reload}
             selectedSegment={selectedSegment}
           />
-        </div>
-
-        <div className="timeline-detail-compact">
-          <Drawer
-            description={selectedSegment?.label ?? undefined}
-            onOpenChange={setDetailOpen}
-            open={detailOpen}
-            title="요청 상세"
-            trigger={
-              <Button disabled={!selectedSegment} size="sm" variant="ghost">
-                상세 보기
-              </Button>
-            }
-          >
-            <RequestInspector
-              detailState={requestDetail.state}
-              onRetry={requestDetail.reload}
-              selectedSegment={selectedSegment}
-            />
-          </Drawer>
         </div>
       </section>
     </div>
@@ -384,12 +412,11 @@ function Legend() {
   return (
     <div className="legend-grid">
       {LEGEND.map((item) => (
-        <div className="legend-item" key={item.label}>
-          <StatusBadge icon={item.icon} tone={item.tone}>
+        <Tooltip key={item.label} label={item.meaning} side="top">
+          <StatusBadge focusable icon={item.icon} tone={item.tone}>
             {item.label}
           </StatusBadge>
-          <span>{item.meaning}</span>
-        </div>
+        </Tooltip>
       ))}
     </div>
   );

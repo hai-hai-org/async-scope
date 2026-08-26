@@ -3,17 +3,16 @@ export type RouteKey = "timeline" | "requests" | "analyzer" | "settings";
 export type NavItem = {
   key: RouteKey;
   label: string;
-  icon: string;
   href: string;
 };
 
 export const DEFAULT_ROUTE: RouteKey = "timeline";
 
 export const navItems: NavItem[] = [
-  { key: "timeline", label: "Timeline", icon: "↔", href: "#/timeline" },
-  { key: "requests", label: "Requests", icon: "≡", href: "#/requests" },
-  { key: "analyzer", label: "Analyzer", icon: "!", href: "#/analyzer" },
-  { key: "settings", label: "Settings", icon: "⚙", href: "#/settings" },
+  { key: "timeline", label: "Timeline", href: "#/timeline" },
+  { key: "requests", label: "Requests", href: "#/requests" },
+  { key: "analyzer", label: "Analyzer", href: "#/analyzer" },
+  { key: "settings", label: "Settings", href: "#/settings" },
 ];
 
 // 화면 설명은 페이지가 아니라 여기에 둔다. 한 곳에서 어휘를 맞추기 위해서다.

@@ -44,7 +44,7 @@ export function RequestDetailPanel({
   emptyTitle,
   initialSource = null,
   onRetry,
-  title = "요청 상세",
+  title = "Request Detail",
 }: RequestDetailPanelProps) {
   const detail = detailState.data;
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);

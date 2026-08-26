@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   type ClockAnchor,
   formatDuration,
@@ -36,7 +36,9 @@ export function BlockingAlert({
   const findings = useFindings(query);
   const { reload } = findings;
 
-  // blocking 수가 변할 때만 다시 읽는다.
+  // blockingCount는 effect 본문에서 쓰이지 않지만 이 재조회의 트리거다.
+  // "blocking 수가 변했을 때만 다시 읽는다"가 의도이므로 의존성에 남긴다.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 값이 아니라 신호다
   useEffect(() => {
     reload();
   }, [blockingCount, reload]);

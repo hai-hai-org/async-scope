@@ -106,7 +106,7 @@ a {
   inset-block-start: 0;
   block-size: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: var(--space-6);
   padding: var(--space-5) var(--space-4);
   border-inline-end: 1px solid var(--border-subtle);
@@ -138,38 +138,12 @@ a {
 }
 
 .brand__caption,
-.sidebar__footer,
 .footer,
 .eyebrow,
 .field-help {
   color: var(--text-tertiary);
   font: var(--text-caption);
   letter-spacing: var(--tracking-caption);
-}
-
-.sidebar__footer {
-  display: grid;
-  gap: var(--space-2);
-  align-content: end;
-}
-
-.sidebar__footer-title {
-  margin: 0;
-  color: var(--text-secondary);
-  font: var(--text-h3);
-}
-
-.sidebar__snippet {
-  margin: 0;
-  padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  color: var(--text-secondary);
-  font: var(--text-code);
-  /* 192px sidebar에서 잘리지 않게 접는다. scroll은 좁은 rail에서 발견되지 않는다. */
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .nav-list {
@@ -205,11 +179,6 @@ a {
   color: var(--text-primary);
 }
 
-.nav-icon {
-  inline-size: 20px;
-  text-align: center;
-}
-
 .shell-body {
   min-inline-size: 0;
   min-block-size: 100dvh;
@@ -224,14 +193,16 @@ a {
   justify-content: space-between;
   gap: var(--space-4);
   padding: 0 var(--space-6);
-  border-block-end: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-canvas) 88%, transparent);
+  /* 반투명도 하단 선도 없다. 뒤로 스크롤되는 것이 없으니 유리 효과가 성립하지
+   * 않고 색만 어긋나 보이며(DESIGN.md §7의 glassmorphism 금지), 하단 선은 바로
+   * 아래 패널 상단과 겹쳐 이중선이 된다. 분리는 같은 표면 + 여백으로만 한다. */
+  background: var(--surface-canvas);
 }
 
 .header {
   min-block-size: var(--header-height);
   flex-wrap: wrap;
-  padding-block: var(--space-3);
+  padding-block: var(--space-4) var(--space-2);
 }
 
 .header__heading {
@@ -252,8 +223,6 @@ a {
 
 .footer {
   min-block-size: var(--footer-height);
-  border-block-start: 1px solid var(--border-subtle);
-  border-block-end: 0;
 }
 
 .header__title {
@@ -274,6 +243,13 @@ a {
 .header__actions {
   justify-content: flex-end;
   min-inline-size: 0;
+}
+
+/* 테마·Export를 한 덩어리로 묶어 배지와 같은 줄바꿈에 휘둘리지 않게 한다. */
+.header__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .main {
@@ -328,7 +304,6 @@ a {
   gap: var(--space-2);
   min-block-size: 84px;
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
@@ -345,14 +320,12 @@ a {
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
 }
 
 .code-sample {
   overflow: auto;
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   color: var(--text-secondary);
@@ -368,7 +341,6 @@ a {
 .metadata-grid div {
   min-inline-size: 0;
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -392,8 +364,7 @@ a {
 
   /* 인터랙티브가 아니고 사이드바가 aria-label을 가지므로 완전히 감춰도 된다. */
   .brand__text,
-  .brand__caption,
-  .sidebar__footer {
+  .brand__caption {
     display: none;
   }
 
@@ -401,28 +372,8 @@ a {
     padding-inline: var(--space-3);
   }
 
-  .nav-item {
-    justify-content: center;
-    padding-inline: 0;
-  }
-
   .grid--three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* icon rail 구간(768~1279px)에서만 라벨을 화면에서 감춘다.
- * display: none은 접근성 트리에서도 지우므로, 그러면 nav-item에 남는 것이
- * aria-hidden인 아이콘뿐이라 링크가 이름 없는 상태가 된다 (WCAG 4.1.2).
- * 범위를 좁혀 두지 않으면 375px의 bottom navigation 라벨까지 감춰진다. */
-@media (min-width: 768px) and (max-width: 1279px) {
-  .nav-label {
-    position: absolute;
-    inline-size: 1px;
-    block-size: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 }
 
@@ -443,8 +394,7 @@ a {
     border-inline-end: 0;
   }
 
-  .brand,
-  .sidebar__footer {
+  .brand {
     display: none;
   }
 
@@ -456,16 +406,9 @@ a {
 
   .nav-item {
     min-block-size: var(--control-touch);
+    justify-content: center;
     padding-inline: var(--space-1);
     font: var(--text-caption);
-  }
-
-  .nav-label {
-    display: inline;
-  }
-
-  .nav-icon {
-    display: none;
   }
 
   .shell-body {
@@ -491,11 +434,6 @@ a {
 
   .header__actions .switch-field {
     gap: var(--space-2);
-  }
-
-  /* buffer 출처는 보조 정보다. 좁은 폭에서는 제목·상태·컨트롤을 먼저 보인다. */
-  .header__actions > .badge:nth-of-type(2) {
-    display: none;
   }
 
   .header__description {

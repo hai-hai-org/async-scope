@@ -60,14 +60,18 @@ export function TimelinePlot({
   const playhead = playheadOffset(playheadNs, viewport);
   const showPlayhead = playhead >= 0 && playhead <= 100;
   // roving tabindex 좌표를 만들기 위해 가시 세그먼트를 행 단위로 미리 나눈다.
+  // row 자체도 뷰포트 밖이면 걸러낸다 — 안 그러면 창을 좁혔을 때 몇 분 전에
+  // 끝난 요청이 시각·경로만 남긴 채 트랙이 텅 빈 상태로 목록에 계속 남는다.
   const visibleRows = useMemo(
     () =>
-      model.rows.map((row) => ({
-        row,
-        segments: row.segments.filter((segment) =>
-          segmentIsVisible(segment, viewport),
-        ),
-      })),
+      model.rows
+        .filter((row) => segmentIsVisible(row, viewport))
+        .map((row) => ({
+          row,
+          segments: row.segments.filter((segment) =>
+            segmentIsVisible(segment, viewport),
+          ),
+        })),
     [model.rows, viewport],
   );
   const roving = useRovingSegments(visibleRows, selectedSegmentId);
@@ -135,6 +139,15 @@ export function TimelinePlot({
           aria-label="실행 구간"
           aria-orientation="horizontal"
         >
+          {/* row 자체를 뷰포트로 거르므로, 요청은 있어도 이 구간에는 없을 수
+              있다(예: 창을 좁힌 뒤 예전 시간대로 pan). 빈 트랙 목록이 아니라
+              이유를 알려준다. */}
+          {visibleRows.length === 0 ? (
+            <p className="timeline-rows-empty">
+              이 구간에는 표시할 요청이 없습니다. 좌우로 이동하거나 확대/축소해
+              보세요.
+            </p>
+          ) : null}
           {visibleRows.map(({ row, segments }, rowIndex) => (
             <article
               aria-label={`${row.label}, ${row.status}, ${formatDuration(
@@ -203,6 +216,8 @@ type VisibleRow = {
   segments: TimelineSegment[];
 };
 
+const key = (r: number, c: number) => `${r}:${c}`;
+
 /**
  * 세그먼트 집합을 하나의 composite widget으로 다룬다 (roving tabindex).
  * 세그먼트가 각자 Tab 정지를 가지면 요청이 많을 때 타임라인을 지나가는 데
@@ -214,7 +229,6 @@ function useRovingSegments(
 ) {
   const [active, setActive] = useState({ row: 0, column: 0 });
   const refs = useRef(new Map<string, HTMLButtonElement>());
-  const key = (r: number, c: number) => `${r}:${c}`;
 
   const registerRef = useCallback(
     (r: number, c: number, node: HTMLButtonElement | null) => {

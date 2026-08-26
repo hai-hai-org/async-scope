@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ClockAnchor } from "../../shared/api/eventStore";
 import type {
   RequestOrder,
@@ -6,13 +6,7 @@ import type {
   RequestStatus,
   RequestsQuery,
 } from "../../shared/api/schemas";
-import {
-  Button,
-  Drawer,
-  EmptyState,
-  Panel,
-  StatusBadge,
-} from "../../shared/ui";
+import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
 import { RequestDetailPanel } from "../request-detail/RequestDetailPanel";
 import { useRequestDetail } from "../request-detail/useRequestDetail";
 import { RequestsTable } from "./RequestsTable";
@@ -47,18 +41,10 @@ export function RequestsPage({
   const [draft, setDraft] = useState<RequestsDraft>(() =>
     draftFromQuery(query),
   );
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const requests = useRequests(query);
   const detail = useRequestDetail({
     requestId: selectedRequestId,
   });
-  const selectedRequest = useMemo(
-    () =>
-      requests.state.data?.items.find(
-        (request) => request.request_id === selectedRequestId,
-      ) ?? null,
-    [requests.state.data, selectedRequestId],
-  );
 
   useEffect(() => {
     const syncSelected = () => setSelectedRequestId(requestIdFromHash());
@@ -90,7 +76,6 @@ export function RequestsPage({
   };
   const selectRequest = (requestId: string) => {
     setSelectedRequestId(requestId);
-    setDrawerOpen(true);
     setRequestIdHash(requestId);
   };
 
@@ -126,36 +111,13 @@ export function RequestsPage({
           />
         </Panel>
 
-        <div className="requests-detail-desktop detail-aside">
+        <div className="detail-aside">
           <RequestDetailPanel
             detailState={detail.state}
             emptyDescription="목록에서 요청을 선택하면 상세 정보가 표시됩니다."
             emptyTitle="선택된 요청이 없습니다"
             onRetry={detail.reload}
           />
-        </div>
-
-        <div className="requests-detail-compact">
-          <Drawer
-            description={
-              selectedRequest?.path ?? selectedRequestId ?? undefined
-            }
-            onOpenChange={setDrawerOpen}
-            open={drawerOpen}
-            title="요청 상세"
-            trigger={
-              <Button disabled={!selectedRequestId} size="sm" variant="ghost">
-                상세 보기
-              </Button>
-            }
-          >
-            <RequestDetailPanel
-              detailState={detail.state}
-              emptyDescription="목록에서 요청을 선택하면 상세 정보가 표시됩니다."
-              emptyTitle="선택된 요청이 없습니다"
-              onRetry={detail.reload}
-            />
-          </Drawer>
         </div>
       </section>
     </div>

@@ -17,7 +17,7 @@ export function RequestInspector({
 }: RequestInspectorProps) {
   if (selectedSegment?.rowId === "__tasks") {
     return (
-      <Panel title="요청 상세">
+      <Panel title="Request Detail">
         <EmptyState
           description={`${selectedSegment.label} · ${formatDuration(
             selectedSegment.durationNs,
@@ -35,7 +35,7 @@ export function RequestInspector({
       emptyTitle="선택된 요청이 없습니다"
       initialSource={selectedSegment?.source ?? null}
       onRetry={onRetry}
-      title="요청 상세"
+      title="Request Detail"
     />
   );
 }
