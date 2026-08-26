@@ -72,6 +72,69 @@ export type ExportPayload = {
   events: NormalizedEvent[];
 };
 
+export type RequestStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "disconnected";
+
+export type RequestSummary = {
+  request_id: string;
+  method: string | null;
+  path: string | null;
+  status: RequestStatus;
+  status_code: number | null;
+  started_at_ns: number;
+  ended_at_ns: number | null;
+  duration_ns: number | null;
+  response_started_at_ns: number | null;
+  event_count: number;
+  span_count: number;
+  task_count: number;
+  libraries: string[];
+  has_blocking: boolean;
+  has_unknown_await: boolean;
+};
+
+export type TimeDistributionBucket =
+  | "running"
+  | "waiting"
+  | "blocking"
+  | "response"
+  | "unattributed";
+
+export type TimeDistribution = {
+  duration_ns: number | null;
+  measured_ns: number;
+  complete: boolean;
+  buckets: Record<TimeDistributionBucket, number>;
+};
+
+export type SpanNode = {
+  span_id: string;
+  parent_span_id: string | null;
+  task_id: string | null;
+  label: string | null;
+  source: SourceLocation | null;
+  started_at_ns: number;
+  ended_at_ns: number | null;
+  duration_ns: number | null;
+  wait_ns: number;
+  libraries: string[];
+  evidence: Evidence | null;
+  confidence: number | null;
+  truncated: boolean;
+  children: SpanNode[];
+};
+
+export type RequestDetailPayload = {
+  request: RequestSummary;
+  time_distribution: TimeDistribution;
+  spans: SpanNode[];
+  events: NormalizedEvent[];
+};
+
 export type ApiState<T> =
   | { state: "loading"; data: null; error: null }
   | { state: "ready"; data: T; error: null }

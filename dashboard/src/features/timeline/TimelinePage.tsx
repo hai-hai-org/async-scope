@@ -1,13 +1,30 @@
-import { useMemo, useState } from "react";
-import type { BufferSource, NormalizedEvent } from "../../shared/api/schemas";
-import { Button, EmptyState, Panel, StatusBadge } from "../../shared/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchRequestDetail } from "../../shared/api/client";
+import type {
+  BufferSource,
+  ClientStatus,
+  NormalizedEvent,
+  RequestDetailPayload,
+} from "../../shared/api/schemas";
+import type { SseStatus } from "../../shared/api/sse";
+import { useEventStream } from "../../shared/api/useEventStream";
+import { Button, Panel, StatusBadge } from "../../shared/ui";
 import { eventFixtures } from "../../test/fixtures";
+import { RequestInspector } from "./RequestInspector";
 import { TimelinePlot } from "./TimelinePlot";
 import { TimelineToolbar } from "./TimelineToolbar";
 import {
+  autoScrollStart,
+  buildFallbackRequestDetail,
   buildTimelineModel,
+  clampViewportStart,
+  createTimelineViewport,
   formatDuration,
+  latestCursor,
+  mergeTimelineEvents,
+  panViewportStart,
   type TimelineSegment,
+  ZOOM_LEVELS,
 } from "./timeline";
 
 type FixtureKey = keyof typeof eventFixtures;
@@ -17,37 +34,285 @@ const fixtureLabels: Record<FixtureKey, string> = {
   blocking: "blocking",
   unknownAwait: "unknown await",
   adapterAwaits: "adapter awaits",
+  failureCancel: "failure/cancel",
+  disconnect: "disconnect",
+  backgroundTask: "background task",
 };
 
 type TimelinePageProps = {
   bufferSource: BufferSource;
   events?: NormalizedEvent[];
+  onClientStatusChange?: (status: ClientStatus | null) => void;
 };
 
-export function TimelinePage({ bufferSource, events }: TimelinePageProps) {
+type DetailState = {
+  data: RequestDetailPayload | null;
+  errorMessage: string | null;
+  state: "idle" | "loading" | "ready" | "fallback" | "error";
+};
+
+export function TimelinePage({
+  bufferSource,
+  events,
+  onClientStatusChange,
+}: TimelinePageProps) {
   const [fixtureKey, setFixtureKey] = useState<FixtureKey>("timeline");
+  const [liveEvents, setLiveEvents] = useState<NormalizedEvent[]>(events ?? []);
+  const [pendingEvents, setPendingEvents] = useState<NormalizedEvent[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [zoomIndex, setZoomIndex] = useState(2);
+  const [viewportStartNs, setViewportStartNs] = useState<number | undefined>();
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
+  const [detailReloadToken, setDetailReloadToken] = useState(0);
+  const [detailState, setDetailState] = useState<DetailState>({
+    state: "idle",
+    data: null,
+    errorMessage: null,
+  });
   const isFixtureMode = events === undefined;
-  const sourceEvents = isFixtureMode ? eventFixtures[fixtureKey] : events;
+  const sourceEvents = isFixtureMode ? eventFixtures[fixtureKey] : liveEvents;
+  const zoomLevel = ZOOM_LEVELS[zoomIndex];
   const model = useMemo(() => buildTimelineModel(sourceEvents), [sourceEvents]);
+  const viewport = useMemo(
+    () => createTimelineViewport(model, zoomLevel, viewportStartNs),
+    [model, viewportStartNs, zoomLevel],
+  );
   const selectedSegment = selectedSegmentId
     ? findSegment(
         model.rows.flatMap((row) => row.segments),
         selectedSegmentId,
       )
     : null;
+  const selectedRequestId =
+    selectedSegment && selectedSegment.rowId !== "__tasks"
+      ? selectedSegment.rowId
+      : null;
+  const fallbackDetail = useMemo(
+    () =>
+      selectedRequestId
+        ? buildFallbackRequestDetail(sourceEvents, selectedRequestId)
+        : null,
+    [selectedRequestId, sourceEvents],
+  );
+  const initialCursor = useMemo(() => latestCursor(events ?? []), [events]);
+
+  useEffect(() => {
+    if (events) {
+      setLiveEvents(events);
+      setPendingEvents([]);
+      setViewportStartNs(undefined);
+    }
+  }, [events]);
+
+  useEffect(() => {
+    setViewportStartNs((current) =>
+      autoScroll || current == null
+        ? autoScrollStart(model, zoomLevel)
+        : clampViewportStart(model, zoomLevel, current),
+    );
+  }, [autoScroll, model, zoomLevel]);
+
+  const handleStreamEvent = useCallback(
+    (event: NormalizedEvent) => {
+      if (isPaused) {
+        setPendingEvents((current) => mergeTimelineEvents(current, [event]));
+        return;
+      }
+      setLiveEvents((current) => mergeTimelineEvents(current, [event]));
+    },
+    [isPaused],
+  );
+
+  const handleGap = useCallback(() => {
+    setLiveEvents([]);
+    setPendingEvents([]);
+    setSelectedSegmentId(null);
+    setAutoScroll(false);
+  }, []);
+
+  const stream = useEventStream({
+    enabled: !isFixtureMode,
+    initialCursor,
+    onEvent: handleStreamEvent,
+    onGap: handleGap,
+  });
+
+  const streamStatus: SseStatus = isFixtureMode ? "idle" : stream.status;
+  const clientStatus = clientStatusFromTimeline({
+    isFixtureMode,
+    isPaused,
+    streamStatus,
+  });
+
+  useEffect(() => {
+    onClientStatusChange?.(clientStatus);
+  }, [clientStatus, onClientStatusChange]);
+
+  useEffect(
+    () => () => {
+      onClientStatusChange?.(null);
+    },
+    [onClientStatusChange],
+  );
+
+  useEffect(() => {
+    if (selectedSegmentId && !selectedSegment) {
+      setSelectedSegmentId(null);
+    }
+  }, [selectedSegment, selectedSegmentId]);
+
+  useEffect(() => {
+    const retryToken = detailReloadToken;
+    if (!selectedRequestId) {
+      setDetailState({
+        state: "idle",
+        data: null,
+        errorMessage: null,
+      });
+      return;
+    }
+    if (isFixtureMode) {
+      setDetailState({
+        state: fallbackDetail ? "fallback" : "error",
+        data: fallbackDetail,
+        errorMessage: fallbackDetail ? null : "fixture detail unavailable",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setDetailState({ state: "loading", data: null, errorMessage: null });
+    fetchRequestDetail(selectedRequestId)
+      .then((detail) => {
+        if (!cancelled) {
+          setDetailState({
+            state: "ready",
+            data: detail,
+            errorMessage: null,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setDetailState({
+          state: fallbackDetail ? "fallback" : "error",
+          data: fallbackDetail,
+          errorMessage:
+            error instanceof Error ? error.message : "request detail failed",
+        });
+      });
+    return () => {
+      void retryToken;
+      cancelled = true;
+    };
+  }, [detailReloadToken, fallbackDetail, isFixtureMode, selectedRequestId]);
+
+  const togglePause = useCallback(() => {
+    setIsPaused((paused) => {
+      if (paused) {
+        setLiveEvents((current) => mergeTimelineEvents(current, pendingEvents));
+        setPendingEvents([]);
+        if (autoScroll) {
+          setViewportStartNs(undefined);
+        }
+        return false;
+      }
+      return true;
+    });
+  }, [autoScroll, pendingEvents]);
+
+  const zoomIn = useCallback(() => {
+    setZoomIndex((index) => Math.min(ZOOM_LEVELS.length - 1, index + 1));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoomIndex((index) => Math.max(0, index - 1));
+  }, []);
+
+  const panLeft = useCallback(() => {
+    setAutoScroll(false);
+    setViewportStartNs((current) =>
+      panViewportStart(
+        model,
+        zoomLevel,
+        current ?? autoScrollStart(model, zoomLevel),
+        -1,
+      ),
+    );
+  }, [model, zoomLevel]);
+
+  const panRight = useCallback(() => {
+    setAutoScroll(false);
+    setViewportStartNs((current) =>
+      panViewportStart(
+        model,
+        zoomLevel,
+        current ?? autoScrollStart(model, zoomLevel),
+        1,
+      ),
+    );
+  }, [model, zoomLevel]);
+
+  const toggleAutoScroll = useCallback(() => {
+    setAutoScroll((current) => !current);
+  }, []);
+
+  const reconnect = useCallback(() => {
+    setLiveEvents([]);
+    setPendingEvents([]);
+    setSelectedSegmentId(null);
+    setAutoScroll(true);
+    stream.reconnect(null);
+  }, [stream]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTextEntry(event.target)) {
+        return;
+      }
+      if (event.key === " " && !isButtonLike(event.target)) {
+        event.preventDefault();
+        togglePause();
+      }
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomIn();
+      }
+      if (event.key === "-") {
+        event.preventDefault();
+        zoomOut();
+      }
+      if (event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        toggleAutoScroll();
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        panLeft();
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        panRight();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [panLeft, panRight, toggleAutoScroll, togglePause, zoomIn, zoomOut]);
 
   return (
     <div className="dashboard-page">
       <section className="page-hero">
         <div>
-          <p className="eyebrow">Day14</p>
-          <h2>Timeline 기본 구조</h2>
+          <p className="eyebrow">Day15+16 · Issue #63</p>
+          <h2>Timeline controls와 RequestInspector</h2>
           <p>
-            fixture/export event를 request row, segment, blocking marker,
-            playhead로 변환한다. live stream과 zoom control은 Day15 범위다.
+            live stream을 잃지 않고 pause·zoom·pan으로 탐색하며, 선택한
+            request의 metadata와 시간 분포를 같은 event buffer에서 설명한다.
           </p>
         </div>
         <div className="cluster">
@@ -84,31 +349,57 @@ export function TimelinePage({ bufferSource, events }: TimelinePageProps) {
         title="Timeline"
       >
         <TimelineToolbar
+          autoScroll={autoScroll}
           bufferSource={bufferSource}
+          bufferedCount={pendingEvents.length}
+          canPan={viewport.durationNs < model.durationNs}
+          canReconnect={
+            !isFixtureMode &&
+            (streamStatus === "gap" ||
+              streamStatus === "error" ||
+              streamStatus === "disconnected")
+          }
+          canZoomIn={zoomIndex < ZOOM_LEVELS.length - 1}
+          canZoomOut={zoomIndex > 0}
           eventCount={sourceEvents.length}
-          windowLabel={formatDuration(model.durationNs)}
+          isPaused={isPaused}
+          onPanLeft={panLeft}
+          onPanRight={panRight}
+          onReconnect={reconnect}
+          onToggleAutoScroll={toggleAutoScroll}
+          onTogglePause={togglePause}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          streamStatus={streamStatus}
+          windowLabel={formatDuration(viewport.durationNs)}
+          zoomLevel={zoomLevel}
         />
+        {stream.gap ? (
+          <div className="timeline-alert" role="alert">
+            <strong>event gap</strong>
+            <span>
+              cursor {stream.gap.cursor ?? "none"} 이후 stream을 이어 받을 수
+              없다. Reconnect는 cursor 없이 현재 buffer를 다시 읽는다.
+            </span>
+          </div>
+        ) : null}
         <TimelinePlot
           model={model}
           onSelectSegment={setSelectedSegmentId}
+          playheadNs={model.axisEndNs}
           selectedSegmentId={selectedSegmentId}
+          viewport={viewport}
         />
       </Panel>
 
       <section className="grid grid--two">
-        <Panel
-          description="Day16 RequestInspector의 입력이 될 최소 선택 상태다."
-          title="Selection"
-        >
-          {selectedSegment ? (
-            <SelectedSegment segment={selectedSegment} />
-          ) : (
-            <EmptyState
-              description="Timeline segment를 선택하면 evidence, duration, source 요약을 보여 준다."
-              title="선택된 segment 없음"
-            />
-          )}
-        </Panel>
+        <RequestInspector
+          detail={detailState.data}
+          errorMessage={detailState.errorMessage}
+          onRetry={() => setDetailReloadToken((value) => value + 1)}
+          selectedSegment={selectedSegment}
+          state={detailState.state}
+        />
         <Panel
           description="Timeline state vocabulary를 고정한다."
           title="Legend"
@@ -136,33 +427,45 @@ export function TimelinePage({ bufferSource, events }: TimelinePageProps) {
   );
 }
 
-function SelectedSegment({ segment }: { segment: TimelineSegment }) {
-  return (
-    <dl className="metadata-grid">
-      <div>
-        <dt>label</dt>
-        <dd>{segment.label}</dd>
-      </div>
-      <div>
-        <dt>duration</dt>
-        <dd>{formatDuration(segment.durationNs)}</dd>
-      </div>
-      <div>
-        <dt>evidence</dt>
-        <dd>{segment.evidence}</dd>
-      </div>
-      <div>
-        <dt>source</dt>
-        <dd>
-          {segment.source
-            ? `${segment.source.file}:${segment.source.line}`
-            : "missing"}
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
 function findSegment(segments: TimelineSegment[], id: string) {
   return segments.find((segment) => segment.id === id) ?? null;
+}
+
+function clientStatusFromTimeline({
+  isFixtureMode,
+  isPaused,
+  streamStatus,
+}: {
+  isFixtureMode: boolean;
+  isPaused: boolean;
+  streamStatus: SseStatus;
+}): ClientStatus | null {
+  if (isFixtureMode) {
+    return null;
+  }
+  if (isPaused) {
+    return "paused";
+  }
+  if (
+    streamStatus === "disconnected" ||
+    streamStatus === "gap" ||
+    streamStatus === "error"
+  ) {
+    return "disconnected";
+  }
+  return "running";
+}
+
+function isTextEntry(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest("input, textarea, select, [contenteditable]"));
+}
+
+function isButtonLike(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(target.closest("button, a"));
 }

@@ -13,14 +13,16 @@ export type ParsedSseFrame =
   | {
       event: "asyncscope.gap";
       id: null;
-      data: {
-        error: "event_gap";
-        cursor: number | null;
-        first_sequence: number | null;
-        last_sequence: number | null;
-        dropped_count: number;
-      };
+      data: SseGapPayload;
     };
+
+export type SseGapPayload = {
+  error: "event_gap";
+  cursor: number | null;
+  first_sequence: number | null;
+  last_sequence: number | null;
+  dropped_count: number;
+};
 
 export function eventSourceUrl(cursor?: number | null) {
   const params = new URLSearchParams();

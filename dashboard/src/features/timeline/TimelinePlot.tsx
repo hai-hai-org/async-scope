@@ -1,11 +1,23 @@
 import { useMemo } from "react";
-import type { TimelineModel, TimelineSegment } from "./timeline";
-import { formatDuration, segmentOffset, segmentWidth } from "./timeline";
+import type {
+  TimelineModel,
+  TimelineSegment,
+  TimelineViewport,
+} from "./timeline";
+import {
+  formatDuration,
+  playheadOffset,
+  segmentIsVisible,
+  segmentOffset,
+  segmentWidth,
+} from "./timeline";
 
 type TimelinePlotProps = {
   model: TimelineModel;
   onSelectSegment: (id: string) => void;
+  playheadNs: number;
   selectedSegmentId: string | null;
+  viewport: TimelineViewport;
 };
 
 const TICK_COUNT = 5;
@@ -13,19 +25,29 @@ const TICK_COUNT = 5;
 export function TimelinePlot({
   model,
   onSelectSegment,
+  playheadNs,
   selectedSegmentId,
+  viewport,
 }: TimelinePlotProps) {
   const ticks = useMemo(
     () =>
       Array.from({ length: TICK_COUNT }, (_, index) => {
         const ratio = index / (TICK_COUNT - 1);
+        const relativeNs = Math.round(
+          viewport.startNs + viewport.durationNs * ratio - model.axisStartNs,
+        );
         return {
-          label: formatDuration(Math.round(model.durationNs * ratio)),
+          label:
+            relativeNs < 0
+              ? `-${formatDuration(Math.abs(relativeNs))}`
+              : formatDuration(relativeNs),
           offset: ratio * 100,
         };
       }),
-    [model.durationNs],
+    [model.axisStartNs, viewport.durationNs, viewport.startNs],
   );
+  const playhead = playheadOffset(playheadNs, viewport);
+  const showPlayhead = playhead >= 0 && playhead <= 100;
 
   if (model.rows.length === 0) {
     return (
@@ -57,6 +79,12 @@ export function TimelinePlot({
                 style={{ insetInlineStart: `${tick.offset}%` }}
               />
             ))}
+            {showPlayhead ? (
+              <span
+                className="timeline-playhead"
+                style={{ insetInlineStart: `${playhead}%` }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -73,15 +101,24 @@ export function TimelinePlot({
                 </span>
               </div>
               <div className="timeline-row__track">
-                {row.segments.map((segment) => (
-                  <SegmentButton
-                    key={segment.id}
-                    model={model}
-                    onSelect={onSelectSegment}
-                    selected={selectedSegmentId === segment.id}
-                    segment={segment}
+                {row.segments
+                  .filter((segment) => segmentIsVisible(segment, viewport))
+                  .map((segment) => (
+                    <SegmentButton
+                      key={segment.id}
+                      onSelect={onSelectSegment}
+                      selected={selectedSegmentId === segment.id}
+                      segment={segment}
+                      viewport={viewport}
+                    />
+                  ))}
+                {showPlayhead ? (
+                  <span
+                    aria-hidden="true"
+                    className="timeline-row__playhead"
+                    style={{ insetInlineStart: `${playhead}%` }}
                   />
-                ))}
+                ) : null}
               </div>
             </article>
           ))}
@@ -94,19 +131,19 @@ export function TimelinePlot({
 }
 
 function SegmentButton({
-  model,
   onSelect,
   selected,
   segment,
+  viewport,
 }: {
-  model: TimelineModel;
   onSelect: (id: string) => void;
   selected: boolean;
   segment: TimelineSegment;
+  viewport: TimelineViewport;
 }) {
   const style = {
-    insetInlineStart: `${segmentOffset(segment, model)}%`,
-    inlineSize: `${segmentWidth(segment, model)}%`,
+    insetInlineStart: `${segmentOffset(segment, viewport)}%`,
+    inlineSize: `${segmentWidth(segment, viewport)}%`,
   };
   return (
     <button

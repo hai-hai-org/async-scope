@@ -9,6 +9,7 @@ import { TimelinePage } from "./features/timeline/TimelinePage";
 import { fetchExport, fetchSummary } from "./shared/api/client";
 import type {
   ApiState,
+  ClientStatus,
   ExportPayload,
   SummaryPayload,
 } from "./shared/api/schemas";
@@ -16,6 +17,8 @@ import { fallbackExport, fallbackSummary } from "./test/fixtures";
 
 export default function App() {
   const [isLightTheme, setIsLightTheme] = useState(false);
+  const [timelineClientStatus, setTimelineClientStatus] =
+    useState<ClientStatus | null>(null);
   const [route] = useHashRoute();
   const summary = useSummary();
   const exportState = useExport();
@@ -31,6 +34,11 @@ export default function App() {
     exportState.state === "ready" || exportState.state === "empty"
       ? exportState.data.events
       : undefined;
+  const status =
+    route === "timeline" && timelineClientStatus
+      ? timelineClientStatus
+      : (summaryData?.status ??
+        (summary.state === "error" ? "disconnected" : "running"));
 
   useEffect(() => {
     document.documentElement.dataset.theme = isLightTheme ? "light" : "dark";
@@ -42,13 +50,12 @@ export default function App() {
       bufferSource={summaryData?.buffer.source ?? exportData.buffer.source}
       isLightTheme={isLightTheme}
       onThemeChange={setIsLightTheme}
-      status={
-        summaryData?.status ??
-        (summary.state === "error" ? "disconnected" : "running")
-      }
+      status={status}
       statusReason={summaryData?.status_reason}
     >
-      {renderRoute(route, summary, exportData, timelineEvents)}
+      {renderRoute(route, summary, exportData, timelineEvents, {
+        onClientStatusChange: setTimelineClientStatus,
+      })}
     </AppShell>
   );
 }
@@ -58,12 +65,16 @@ function renderRoute(
   summary: ApiState<SummaryPayload>,
   exportData: ExportPayload,
   timelineEvents: ExportPayload["events"] | undefined,
+  timelineOptions: {
+    onClientStatusChange: (status: ClientStatus | null) => void;
+  },
 ) {
   if (route === "timeline") {
     return (
       <TimelinePage
         bufferSource={exportData.buffer.source}
         events={timelineEvents}
+        onClientStatusChange={timelineOptions.onClientStatusChange}
       />
     );
   }
