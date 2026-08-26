@@ -97,6 +97,29 @@ export type RequestSummary = {
   has_unknown_await: boolean;
 };
 
+export type RequestSort = "started_at_ns" | "duration_ns" | "status" | "path";
+
+export type RequestOrder = "asc" | "desc";
+
+export type RequestsQuery = {
+  method?: string;
+  order: RequestOrder;
+  page: number;
+  page_size: number;
+  path?: string;
+  q?: string;
+  sort: RequestSort;
+  status?: RequestStatus;
+};
+
+export type RequestsListPayload = {
+  items: RequestSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+};
+
 export type TimeDistributionBucket =
   | "running"
   | "waiting"
@@ -133,6 +156,12 @@ export type RequestDetailPayload = {
   time_distribution: TimeDistribution;
   spans: SpanNode[];
   events: NormalizedEvent[];
+};
+
+export type SourceSnippetPayload = {
+  file: string;
+  start_line: number;
+  lines: string[];
 };
 
 export type ApiState<T> =
