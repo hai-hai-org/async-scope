@@ -358,10 +358,10 @@
 
 .table {
   inline-size: 100%;
-  /* 고정 열 폭 합(약 640px) + 주 열의 읽을 수 있는 최소 폭을 더한 값이다.
-   * 이보다 작으면 주 열이 짜부러진다. 부족한 폭은 .table-wrap이 스크롤한다
+  /* 모든 열이 고정 폭이면 그 합이 최소 폭이다(현재 requests 표 기준 832px).
+   * 이보다 작으면 열이 짜부러진다. 부족한 폭은 .table-wrap이 스크롤한다
    * (DESIGN.md: "전체 table 영역만 명명된 수평 scroll owner다"). */
-  min-inline-size: 880px;
+  min-inline-size: 832px;
   /* auto layout이면 데이터가 갱신될 때마다 열 경계가 흔들린다.
    * 열 폭은 colgroup이 정하고 내용은 그 안에서 잘린다. */
   table-layout: fixed;
@@ -423,10 +423,6 @@
 .table__sort:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-
-.table__cell--numeric .table__sort {
-  flex-direction: row-reverse;
 }
 
 .table__sort-arrow {
@@ -512,6 +508,15 @@
   color: color-mix(in srgb, var(--status-warning) 72%, var(--text-primary));
 }
 
+/* 색이 없는 상태(예: Timeline "Truncated" — 화면 밖으로 이어질 뿐 문제도
+ * 추론도 아니다) 전용이다. --status-*가 아니라 --text-tertiary를 섞어 다른
+ * 톤과 확실히 구분되는 무채색으로 만든다. 실측(다섯 배경 최악) dark 5.14 /
+ * light 5.33 — 다른 배지들의 최악(dark 4.93/light 4.89)보다도 여유 있다. */
+.badge--neutral {
+  background: color-mix(in srgb, var(--text-tertiary) 14%, transparent);
+  color: color-mix(in srgb, var(--text-tertiary) 72%, var(--text-primary));
+}
+
 .empty-state {
   display: grid;
   justify-items: start;
@@ -591,9 +596,16 @@
   color: var(--status-error);
 }
 
-/* 이 제품이 설명하려는 순간이다. 눈에 띄되 focus를 빼앗지 않는다. */
+/* 이 제품이 설명하려는 순간이다. 눈에 띄되 focus를 빼앗지 않는다.
+ * align-content: start가 필요하다 — 옆 Request Detail 카드와 높이를 맞추려고
+ * .timeline-bottom-row가 이 카드를 늘리는데(stretch), grid의 align-content
+ * 기본값(normal)은 grid에서 stretch와 같아서 늘어난 여백을 auto 행들
+ * 사이사이에 나눠 넣는다 — 내용이 위아래로 부자연스럽게 벌어져 보였다.
+ * start로 고정하면 내용은 위에서부터 자기 크기대로 쌓이고 남는 높이는
+ * 그냥 카드 아래쪽 여백으로 남는다. */
 .blocking-alert {
   display: grid;
+  align-content: start;
   gap: var(--space-4);
   padding: var(--space-5);
   border: 1px solid color-mix(in srgb, var(--status-error) 45%, var(--border-default));
@@ -876,10 +888,16 @@
 
 /* DESIGN.md §5: 44px hit area를 transparent padding으로 확보한다.
  * 버튼 자체가 44px이고, 눈에 보이는 32px 바는 ::before가 그린다.
- * (overflow: hidden이 있으면 ::before로 영역을 넓혀도 잘려서 무효다.) */
+ * (overflow: hidden이 있으면 ::before로 영역을 넓혀도 잘려서 무효다.)
+ * inset-block-start는 lane(TimelinePlot.tsx)에 따라 inline style로 온다 —
+ * 겹치는 segment를 서로 다른 높이에 쌓아야 라벨이 겹치지 않는다. */
 .timeline-segment {
   position: absolute;
-  inset-block-start: 12px;
+  /* z-index:auto인 채로는 이 버튼이 stacking context를 열지 않아서, 아래
+   * ::before의 z-index:-1이 이 버튼 안이 아니라 훨씬 바깥(패널 배경보다도
+   * 뒤)으로 새어나가 색이 그려지자마자 가려진다. 0을 줘서 자체 stacking
+   * context를 만들고, -1을 그 안에서만 "텍스트보다 뒤"로 가둔다. */
+  z-index: var(--z-base);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -907,6 +925,8 @@
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: var(--segment-bg);
+  transition: background-color var(--motion-standard) var(--ease-standard),
+    border-color var(--motion-standard) var(--ease-standard);
   content: "";
 }
 
@@ -916,7 +936,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.timeline-segment[aria-pressed="true"] {
+/* 키보드 포커스 전용 신호다. 클릭해서 선택된 상태(아래 aria-pressed)와는
+ * 다른 질문에 답한다 — "지금 키보드가 어디 있나" vs "지금 뭐가 선택됐나".
+ * 둘 다 같은 파란 링이면 구분이 안 된다. */
+.timeline-segment:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -924,6 +947,14 @@
 .timeline-segment.is-inferred::before {
   border-style: dashed;
   border-color: currentColor;
+}
+
+/* 선택된 구간: Requests·Findings 표의 선택 행(aria-selected)과 같은 문법 —
+ * 링을 두르는 대신 박스 자체(배경·테두리)를 accent로 진하게 만든다. 접근성
+ * 문서: 대비는 가장 낮은 조합(light idle) 기준 4.72:1로 4.5:1을 만족한다. */
+.timeline-segment[aria-pressed="true"]::before {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 24%, var(--segment-bg));
 }
 
 .timeline-segment.is-truncated {
@@ -991,24 +1022,28 @@
   align-items: start;
 }
 
-/* auto-fit은 컨테이너 폭에 맞춰 열 수를 줄인다. 고정 최솟값을 쓰면
- * 트랙이 그 아래로 줄지 않아 패널을 뚫고 나간다. */
-.requests-filters,
-.findings-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
+/* grid auto-fit은 트랙마다 남는 폭이 달라 필드와 버튼 사이에 의도치 않은
+ * 여백을 만든다(각 트랙이 1fr을 나눠 갖고 justify-self:end인 버튼만 트랙
+ * 끝으로 밀리는 식). flex는 각 필드를 실제 필요한 크기만큼만 차지하게
+ * 붙여 두므로, 좁아져도 줄바꿈 전까지는 한 줄에 나란히 붙는다. */
+.requests-filters {
+  display: flex;
+  flex-wrap: wrap;
   align-items: end;
+  gap: var(--space-3);
   margin-block-end: var(--space-4);
 }
 
-.requests-filters > label:first-child {
-  grid-column: span 2;
+.requests-filters > label {
+  flex: 1 1 110px;
 }
 
-.requests-filters > .button,
-.findings-filters > .button {
-  justify-self: end;
+.requests-filters > label:first-child {
+  flex: 2 1 180px;
+}
+
+.requests-filters > .button {
+  flex: 0 0 auto;
 }
 
 .requests-filters label {
@@ -1047,6 +1082,11 @@
 
 .requests-table-wrap {
   min-inline-size: 0;
+  /* 요청이 많아도 표가 끝없이 길어지지 않도록 안에서 세로 스크롤한다.
+   * thead가 sticky이므로 스크롤 컨테이너는 .table-wrap 자신이어야 한다 —
+   * 바깥에 별도 wrapper를 두면 sticky 기준이 어긋나 헤더가 고정되지 않는다. */
+  max-block-size: 560px;
+  overflow-y: auto;
 }
 
 .requests-table__select {
@@ -1089,8 +1129,16 @@
 
 /* DESIGN.md §4: detail inspector는 viewport 안에서 sticky이며 내부가 길 때
  * inspector body만 스크롤한다. 스크롤 조상은 .main(overflow: auto)이다.
- * Requests와 Timeline이 같은 규칙을 쓴다. */
+ * Requests와 Timeline이 같은 규칙을 쓴다.
+ *
+ * display:grid가 필요한 이유: 이 wrapper 자체는 부모 grid(.timeline-bottom-row)의
+ * stretch로 옆 카드와 같은 높이까지 늘어나지만, 그 안의 실제 카드(.panel)는
+ * block 요소라 늘어난 wrapper 높이를 그냥 무시하고 자기 내용만큼만 차지한다 —
+ * 배경·테두리가 없는 wrapper만 커지고 보이는 카드는 짧은 채로 남아 높이가
+ * 안 맞는 것처럼 보인다. grid로 두면 안의 .panel도 기본 stretch로 wrapper
+ * 전체를 채운다. */
 .detail-aside {
+  display: grid;
   position: sticky;
   inset-block-start: 0;
   z-index: var(--z-sticky);
@@ -1099,23 +1147,23 @@
   overflow: auto;
 }
 
-/* DESIGN.md §4 wide: Timeline page는 main/inspector grid다.
- *
- * 스펙은 main을 minmax(680px, 1fr)로 적었지만 그러면 1280px에서 넘친다:
- * 680 + 388(inspector) + 20(gap) + 192(sidebar) + 48(main padding) = 1328px.
- * 1280px도 스펙이 규정한 반응형 기준이므로 고정 최솟값을 두지 않는다.
- * plot은 .timeline-reel이 수평 스크롤을 소유하므로 열이 줄어도 읽을 수 있다. */
+/* Timeline이 이 페이지에서 가장 중요한 컴포넌트라 전체 폭을 혼자 쓴다.
+ * 알림/상세는 그 아래 별도 행(.timeline-bottom-row)에서 좌우로 나뉜다. */
 .timeline-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--detail-wide);
   gap: var(--space-5);
-  align-items: start;
 }
 
-.timeline-main {
+/* 상세(지금 고른 구간)를 먼저, 알림(무엇이 막혔고 어떻게 고치는가)을 그
+ * 옆에 둔다. RequestInspector는 다른 페이지의 detail sidebar와 같은 폭
+ * (--detail-wide, 388px)을 쓴다 — 그 폭에 맞춰 튜닝된 컴포넌트라 재사용하는
+ * 쪽이 새 비율을 만드는 것보다 안전하다. BlockingAlert가 남는 가변폭을 쓴다.
+ * align-items를 지정하지 않으면(기본값 stretch) 둘 다 이 행에서 더 큰 쪽
+ * 높이에 맞춰 늘어난다 — 나란한 두 카드의 높이가 항상 같아야 한다. */
+.timeline-bottom-row {
   display: grid;
-  gap: var(--space-4);
-  min-inline-size: 0;
+  grid-template-columns: var(--detail-wide) minmax(0, 1fr);
+  gap: var(--space-5);
 }
 
 .request-detail {
@@ -1296,14 +1344,33 @@
   gap: var(--space-5);
 }
 
+/* 발견된 문제 목록과 상세를 좌우로 나누면 두 쪽 다 표 열과 본문을 담기엔
+ * 너비가 부족하다. 상하로 쌓아 각자 전체 폭을 쓰게 한다. */
 .analyzer-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
-  align-items: start;
 }
 
+/* grid auto-fit은 트랙마다 남는 폭이 달라 필드와 버튼 사이에 의도치 않은
+ * 여백을 만든다(각 트랙이 1fr을 나눠 갖고 justify-self:end인 버튼만 트랙
+ * 끝으로 밀리는 식). flex는 각 필드를 실제 필요한 크기만큼만 차지하게
+ * 붙여 두므로, 좁아져도 줄바꿈 전까지는 한 줄에 나란히 붙는다. */
+.findings-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
 
+.findings-filters > label {
+  flex: 1 1 130px;
+}
+
+.findings-filters > .button {
+  flex: 0 0 auto;
+}
 
 .findings-filters label {
   display: grid;
@@ -1598,9 +1665,15 @@
   color: var(--status-error);
 }
 
+/* 즉시 적용/재시작 필요 두 section을 나란히 둔다 — 항목이 4개뿐인데 전부
+ * 세로로 쌓으면 짧은 숫자 필드 하나가 패널 전체 폭을 혼자 차지해 낭비가
+ * 크다. auto-fit이라 폭이 좁아지면(narrow, 사이드바 있는 compact) 알아서
+ * 한 열로 줄어든다. */
 .settings-form {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--space-5);
+  align-items: start;
 }
 
 .settings-form__section {
@@ -1609,6 +1682,17 @@
   padding: var(--space-4);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
+}
+
+.settings-form__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+}
+
+/* project_root처럼 값이 긴 필드는 자기 section의 폭을 다 쓴다. */
+.settings-field--wide {
+  grid-column: 1 / -1;
 }
 
 .settings-form__section-header {
@@ -1633,6 +1717,8 @@
 
 .settings-alert {
   display: grid;
+  /* .settings-form이 2열이 됐어도 경고 배너는 항상 폭 전체를 쓴다. */
+  grid-column: 1 / -1;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-control);
@@ -1850,17 +1936,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .timeline-layout {
+  .timeline-bottom-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* DESIGN.md §4: request label column은 compact에서 120px다. */
+  /* DESIGN.md §4: request label column은 compact에서 150px다. */
   .timeline-row {
-    --timeline-label-col: 120px;
+    --timeline-label-col: 150px;
   }
 
   /* .finding-detail__grid는 container query가 대신하므로 여기서 뺐다. */
-  .analyzer-layout,
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1902,10 +1987,20 @@
     min-block-size: var(--control-touch);
   }
 
-  .requests-filters,
-  .findings-filters,
   .request-detail__flow-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .requests-filters,
+  .findings-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .requests-filters > label,
+  .requests-filters > label:first-child,
+  .findings-filters > label {
+    flex: 1 1 auto;
   }
 
   /* 16px 미만이면 iOS Safari가 포커스 시 페이지를 확대한다. */

@@ -200,7 +200,10 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - `fixed-sidenav-shell`: `192px minmax(0, 1fr)`.
 - app은 `100dvb` 높이의 `header / minmax(0, 1fr) / footer` grid다.
 - sidebar, header, footer는 고정되고 main body만 수직 scroll을 소유한다.
-- Timeline page는 `minmax(680px, 1fr) 388px`의 main/inspector grid다.
+- Timeline page는 세로로 두 행이다: 1행은 Request Timeline 패널이 전체 폭을 혼자
+  쓰고(이 페이지에서 가장 중요한 컴포넌트라 좌우로 폭을 나누지 않는다), 2행
+  (`.timeline-bottom-row`)에서 detail inspector(388px)가 먼저, 그 옆에
+  BlockingAlert(가변폭)가 나란히 놓인다.
 - summary metrics는 5열 intrinsic grid이며 최소 카드 폭은 174px이다.
 - detail inspector는 viewport 안에서 sticky이며 내부가 길 때 inspector body만 명시적으로 scroll한다.
 
@@ -209,8 +212,9 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 - sidebar는 160px 텍스트 라벨 목록으로 좁아진다(icon rail이 아니다). label이
   항상 화면에 보이므로 tooltip은 필요 없다.
 - summary metrics는 2~3열로 reflow한다.
-- Timeline과 detail은 한 열로 접히고, `detail-aside`는 그 아래로 이어져 그대로
-  보인다(별도 drawer가 없다 — 아래 설명 참고).
+- Request Timeline은 wide와 마찬가지로 항상 전체 폭이다. `.timeline-bottom-row`만
+  한 열로 접혀 `detail-aside` 아래로 BlockingAlert가 그대로 이어져 보인다(별도
+  drawer가 없다 — 아래 설명 참고).
 - main body가 유일한 수직 scroll owner다.
 
 ### Narrow layout: 375px~767px
@@ -225,7 +229,7 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 ### Timeline geometry
 
 - toolbar 높이: 40px, axis 높이: 36px, request row 최소 높이: 68px.
-- request label column은 wide에서 144px, compact에서 120px, narrow에서 row 위쪽 block으로 이동한다.
+- request label column은 wide에서 190px, compact에서 150px, narrow에서 row 위쪽 block으로 이동한다.
 - plot의 최소 내부 폭은 720px이다. narrow에서는 의도적으로 timeline reel만 수평 pan한다.
 - 선택 playhead는 1px 실선과 10px handle이며 keyboard focus를 받을 수 있다.
 - zoom 단계: 250ms, 500ms, 1s, 2s, 5s visible window. 데이터가 창보다 짧으면 전 구간으로 줄인다.
@@ -286,21 +290,30 @@ AsyncScope는 **조용하고 정확한 비동기 실행 관제실**처럼 느껴
 ### Panel and TimelineToolbar
 
 - **Structure**: title/info + actions. 성격이 다른 세 그룹으로 나뉘고 divider로
-  구분한다 — (1) 재생 제어(Pause/Resume), (2) 줌(줌아웃·구간·줌인 chip + Fit all),
-  (3) 이동(이전·다음 chip + Auto). `−`/구간/`+`, `←`/`→`는 각각 하나의 표면(chip,
+  구분한다 — (1) 이동(이전·Now·다음 chip + Auto), (2) 줌(Wider·구간·Narrower chip
+  + Fit all), (3) 재생 제어(Pause/Resume). "지금 어디를 보고 있나"를 가장 먼저
+  확인하고 싶어 이동을 첫 그룹에 두고, 재생 제어는 손이 가장 덜 가서 마지막에
+  둔다. `←`/Now/`→`, Wider/구간/Narrower는 각각 하나의 표면(chip,
   `--surface-raised`)으로 묶여 낱개 버튼이 아니라 한 컨트롤로 읽힌다.
 - **States**: default, hover, active, focus, disabled, paused, following, manually panned.
-- **Accessibility**: 모든 icon-only button(`−`/`+`/`←`/`→`)은 visible tooltip과
-  accessible name을 가진다. 구간 라벨은 sr-only 접두어("표시 구간")로 스크린리더
-  맥락을 준다. `-`, `+`, `0`, `Space`, `A` keyboard shortcut을 제공하되 form 입력
-  중에는 동작하지 않는다.
+- **Accessibility**: icon-only button(`←`/`→`)은 visible tooltip과 accessible
+  name을 가진다. 나머지(Now/Wider/Narrower/Fit all/Auto/Pause·Resume)는 보이는
+  텍스트가 곧 accessible name이고, tooltip은 부가 설명(description)만 얹는다.
+  구간 라벨은 sr-only 접두어("표시 구간")로 스크린리더 맥락을 준다. `-`, `+`,
+  `0`, `Space`, `A` keyboard shortcut을 제공하되 form 입력 중에는 동작하지 않는다.
 - **Content rule**: Pause/Resume는 아이콘이 아니라 텍스트를 쓴다. 재생 아이콘
   후보(`▶`/`Ⅱ`)가 이미 Timeline Legend에서 segment 상태 "Running"/"Waiting"을
   가리키므로, 같은 화면에서 같은 글리프가 툴바 액션과 segment 상태라는 다른
   의미를 가지면 안 된다. `전체`는 `Fit all`로 영문 통일했다(Pause/Auto와 같은 언어).
   `Fit all`은 5단계 zoom과 다른 별도 모드이므로 활성 시 `Auto`(파란 accent)와
   다른 색(`secondary`, 중립 톤)을 쓴다 — 같은 파란색이면 서로 다른 축의 토글이
-  같은 종류처럼 보인다.
+  같은 종류처럼 보인다. 줌 버튼은 원래 `−`/`+` 기호였는데, 가운데 표시 구간
+  숫자와 나란히 있으니 "+를 누르면 숫자가 커져야지"라는 기대가 실제 동작(더
+  좁은 구간일수록 숫자는 작아짐)과 어긋났다 — `Wider`/`Narrower`로 바꿔 숫자가
+  아니라 "보이는 시간 범위"를 바꾼다는 것을 분명히 한다. `Now`는 `0` 키에
+  연결된 원샷 점프이고, `Auto`(계속 따라가기 토글)와는 다른 동작이라 버튼을
+  분리했다 — 과거를 보다가 "지금이 어디인지"만 한 번 확인하고 싶을 때 `Auto`를
+  누르면 원치 않게 계속-따라가기 모드에 들어간다.
 - **Motion**: switch는 thumb transform, button은 color/opacity만 사용한다.
 
 ### TimelinePlot
@@ -481,6 +494,11 @@ header와 footer는 canvas와 **같은 표면**이고 border도 없다. 뒤로 �
   light success 3.51). `--text-primary`를 28% 섞으면 dark에서는 밝은 쪽, light에서는
   어두운 쪽으로 움직여 양쪽 테마가 한 번에 올라간다 — 최악 dark 4.93 / light 4.89.
 - 윤곽선은 `inferred`(점선)에만 남긴다. 전부 테두리를 두르면 점선이 신호로 읽히지 않는다.
+- `inferred`는 evidence 신호 **전용**이다. Timeline 범례의 `Truncated`(화면 밖으로
+  잘렸을 뿐 추론이 아니다)가 한동안 같은 톤을 빌려 쓰다 `Inferred`와 구분이 안 되는
+  문제가 있었다 — status 색이 없는 상태를 위해 `neutral` 톤을 따로 뒀다. 공식은
+  같되 status 색 대신 `--text-tertiary`를 섞는다(배경 14%, 텍스트 72%+`--text-primary`
+  28%). 실측(다섯 배경 최악) dark 5.14 / light 5.33.
 
 ### shadow는 overlay 전용
 
@@ -558,4 +576,4 @@ reference-fidelity 비교는 위치와 계층만 대상으로 하고, 표면·�
 | DBT-3 | Analyzer 목록의 열 헤더 | Minor | finding을 정렬해 보려는 사용자 | `FindingsQuery`에 sort 파라미터가 없다. 현재 페이지만 클라이언트에서 정렬하면 서버 pagination과 어긋나 사용자를 오해시키므로 정렬 헤더를 제공하지 않는다. `Table` 프리미티브는 `sort` prop을 optional로 받으므로 백엔드가 지원하면 바로 켜진다. | `m` / findings API에 sort 추가 시 종료 |
 | DBT-7 | Requests·Timeline의 `detail-aside`, 1279px 이하 | Minor | 좁은/중간 폭에서 접속하는 사용자 | 이전에는 이 폭에서 우측 drawer로 상세를 열었지만, drawer가 폭 조건 없이 열려 1280px 이상에서도 sticky aside 위에 같은 내용이 또 뜨는 버그가 있었다(위 RequestInspector 참고). 손쉬운 폭 검사 추가 대신 제품이 데스크톱 사용을 전제한다는 판단으로 drawer를 통째로 없앴다. 그 결과 1279px 이하에서는 `detail-aside`가 grid 한 열로 접혀 main 아래로 흐를 뿐, 전용 좁은 화면 처리(모달, 닫기 control, focus trap)가 없다. | `z` / 좁은 화면 request-detail 요구가 실제로 제기되면 재검토 |
 | DBT-6 | light theme의 표면 분리와 스크롤 컨테이너 외곽 | Minor | 밝은 화면을 쓰는 사용자 | light는 panel이 `#FFFFFF`에 붙어 있어 dark만큼 사다리를 벌릴 수 없다(canvas→panel +7.7까지가 한계이고 nested는 recessed로 뒤집어야 한다). 그래서 hairline 의존도가 dark보다 높다. 또 스크롤 컨테이너 외곽(`.table-wrap`·`.timeline-reel`·`.source-viewer`)은 `--border-strong`으로 올렸지만 1.82:1(dark)/1.89:1(light)이다 — 1.4.11의 대상(UI 컴포넌트·필수 그래픽)이 아니어서 미달로 보지 않지만, 잘림 신호로서는 약하다. | `z` / 잘림을 fade나 sticky 그림자로 표현하는 별 작업에서 종료 |
-| DBT-2 | 상태 배지·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` 등)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. (내비게이션은 이후 텍스트 라벨로 바뀌어 이 debt에서 빠졌다.) | `z` / icon을 SVG로 전환할 때 종료 |
+| DBT-2 | 상태 배지·범례의 icon glyph | Minor | 전체 | icon을 text glyph(`●` `△` `▶` `→` 등)로 쓰는데 번들 폰트에 없어 OS 폰트로 폴백한다. 플랫폼마다 모양과 baseline이 달라 배지 안에서 정렬이 미세하게 어긋난다. §1의 "icon은 초기 단계에서 text glyph를 사용한다"에 따른 결과다. (내비게이션은 이후 텍스트 라벨로 바뀌어 이 debt에서 빠졌다. 버퍼 비우기 버튼의 휴지통은 대응하는 text glyph가 없어 먼저 작은 단색 SVG로 넘어갔다 — `AppShell.tsx`의 `TrashIcon`, 나머지 전환의 선례.) | `z` / icon을 SVG로 전환할 때 종료 |

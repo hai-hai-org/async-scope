@@ -51,6 +51,13 @@ export async function downloadExport(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+/** 버퍼를 비우고 지금부터 새로 추적한다. 응답은 export와 같은 모양이다(비운 직후라 events는 항상 빈 배열). */
+export async function clearBuffer(): Promise<ExportPayload> {
+  return fetchJson<ExportPayload>(`${API_PREFIX}/buffer/clear`, {
+    method: "POST",
+  });
+}
+
 export async function fetchSettings(): Promise<SettingsPayload> {
   return fetchJson<SettingsPayload>(`${API_PREFIX}/settings`);
 }

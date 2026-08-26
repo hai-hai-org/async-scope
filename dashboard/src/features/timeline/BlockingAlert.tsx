@@ -83,7 +83,7 @@ export function BlockingAlert({
             {finding.severity}
           </StatusBadge>
           <a className="button button--ghost button--sm" href="#/analyzer">
-            자세히
+            More
           </a>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPORT_PATH = "/__asyncscope__/api/export"
 REPLAY_PATH = "/__asyncscope__/api/replay"
 EVENTS_PATH = "/__asyncscope__/api/events"
+CLEAR_PATH = "/__asyncscope__/api/buffer/clear"
 
 
 @pytest.fixture
@@ -160,3 +162,57 @@ async def test_export_and_replay_methods_are_limited(demo_app):
     assert export_post.json()["error"] == "method_not_allowed"
     assert replay_get.status_code == 405
     assert replay_get.json()["error"] == "method_not_allowed"
+
+
+async def test_clear_api_empties_buffer_and_gaps_a_connected_stream(demo_app):
+    """비운 뒤에도 지금부터는 계속 추적한다 — 버퍼만 비고 tracing은 꺼지지 않는다."""
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            await client.get("/demo/quick")
+            stale_cursor = (await client.get(EXPORT_PATH)).json()["buffer"]["last_sequence"]
+
+            cleared = await client.post(CLEAR_PATH)
+            sse = await client.get(
+                EVENTS_PATH, params={"cursor": stale_cursor, "once": "true"}
+            )
+
+            await client.get("/demo/quick")
+            after = await client.get(EXPORT_PATH)
+    finally:
+        scope.uninstall()
+
+    assert cleared.status_code == 200
+    cleared_payload = cleared.json()
+    assert cleared_payload["schema_version"] == SCHEMA_VERSION
+    assert cleared_payload["events"] == []
+    assert cleared_payload["buffer"]["events"] == 0
+    assert cleared_payload["buffer"]["first_sequence"] is None
+    assert cleared_payload["buffer"]["last_sequence"] is None
+
+    # 옛 cursor로 붙은 연결은 gap을 받는다. first/last_sequence가 둘 다 없다는 게
+    # ring buffer가 밀어낸 것과 통째로 비운 것을 client가 구분하는 신호다.
+    frames = _sse_frames(sse.text)
+    assert len(frames) == 1
+    gap = frames[0]
+    assert gap["event"] == "asyncscope.gap"
+    gap_data = json.loads(gap["data"])
+    assert gap_data["first_sequence"] is None
+    assert gap_data["last_sequence"] is None
+
+    # clear가 tracing 자체를 끄지 않는다 — 이후 요청은 새 buffer에 다시 쌓인다.
+    assert after.json()["buffer"]["events"] > 0
+
+
+async def test_clear_api_method_is_limited(demo_app):
+    scope = AsyncScope(demo_app, project_root=ROOT).install()
+    try:
+        transport = httpx.ASGITransport(app=scope)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            response = await client.get(CLEAR_PATH)
+    finally:
+        scope.uninstall()
+
+    assert response.status_code == 405
+    assert response.json()["error"] == "method_not_allowed"

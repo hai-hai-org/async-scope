@@ -6,8 +6,10 @@ export type TableColumn<T> = {
   render: (row: T) => ReactNode;
   /** table-layout: fixed의 열 폭. 지정하지 않으면 남은 폭을 나눠 갖는다. */
   width?: string;
-  /** 숫자 열은 오른쪽 정렬해야 자릿수가 맞는다. */
+  /** 값 열의 정렬. 숫자 열은 오른쪽 정렬해야 자릿수가 맞는다. */
   align?: "start" | "end";
+  /** 제목 열의 정렬. 지정하지 않으면 align을 따른다(기존 표들의 동작 유지). */
+  headerAlign?: "start" | "center" | "end";
   /** tabular-nums로 폭을 고정한다. stream 갱신 중 숫자가 흔들리지 않게 한다. */
   numeric?: boolean;
   /** 지정하면 헤더가 정렬 버튼이 된다. sort prop이 함께 있어야 동작한다. */
@@ -22,6 +24,7 @@ export type TableSort<K extends string = string> = {
 
 type TableProps<T> = {
   caption: string;
+  className?: string;
   columns: Array<TableColumn<T>>;
   emptyMessage?: string;
   getRowId: (row: T) => string;
@@ -37,6 +40,7 @@ type TableProps<T> = {
 
 export function Table<T>({
   caption,
+  className,
   columns,
   emptyMessage = "표시할 항목이 없습니다.",
   getRowId,
@@ -45,7 +49,10 @@ export function Table<T>({
   sort,
 }: TableProps<T>) {
   return (
-    <section aria-label={`${caption} 스크롤 영역`} className="table-wrap">
+    <section
+      aria-label={`${caption} 스크롤 영역`}
+      className={["table-wrap", className].filter(Boolean).join(" ")}
+    >
       <table className="table">
         <caption className="sr-only">{caption}</caption>
         <colgroup>
@@ -105,13 +112,14 @@ function HeaderCell<T>({
       ? "ascending"
       : "descending"
     : undefined;
+  const headerAlign = column.headerAlign ?? column.align;
 
   return (
     <th
       aria-sort={sortable ? (ariaSort ?? "none") : undefined}
       className={cellClass(column)}
       scope="col"
-      style={column.align ? { textAlign: column.align } : undefined}
+      style={headerAlign ? { textAlign: headerAlign } : undefined}
     >
       {sortable ? (
         <button

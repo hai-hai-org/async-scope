@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { downloadExport } from "../shared/api/client";
 import type { BufferSource, ClientStatus } from "../shared/api/schemas";
 import { Button, StatusBadge, Tooltip, TooltipProvider } from "../shared/ui";
@@ -17,6 +17,7 @@ type AppShellProps = {
   bufferSource?: BufferSource;
   children: ReactNode;
   isLightTheme: boolean;
+  onClearBuffer: () => Promise<void>;
   onThemeChange: (light: boolean) => void;
   status: ClientStatus;
   statusReason?: string | null;
@@ -27,6 +28,7 @@ export function AppShell({
   bufferSource,
   children,
   isLightTheme,
+  onClearBuffer,
   onThemeChange,
   status,
   statusReason,
@@ -93,6 +95,7 @@ export function AppShell({
                   onChange={onThemeChange}
                 />
                 <ExportButton />
+                <ClearBufferButton onClear={onClearBuffer} />
               </div>
             </div>
           </header>
@@ -134,6 +137,115 @@ function ExportButton() {
       <Tooltip label="현재 버퍼에 있는 이벤트 전체를 JSON 파일로 내려받습니다.">
         <Button loading={pending} onClick={save} size="sm" variant="ghost">
           JSON export
+        </Button>
+      </Tooltip>
+      {error ? (
+        <span className="header__error" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * 앱의 다른 아이콘은 전부 text glyph 하나다(↻, ⌦, ▶, ☀/☾ 등 — DBT-2, SVG로
+ * 전환하기 전까지의 임시 방편). "휴지통 모양"은 그런 glyph가 없어서 — 🗑는
+ * emoji라 다른 단색 아이콘들과 렌더링이 달라진다 — 이 버튼 하나만 예외로
+ * 작은 단색 SVG를 쓴다. stroke가 currentColor라 ghost/danger 등 버튼 색을
+ * 그대로 따라간다.
+ */
+function TrashIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      role="img"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.6"
+      viewBox="0 0 16 16"
+      width="16"
+    >
+      <path d="M2.5 4.25h11" />
+      <path d="M5.75 4.25V2.75a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v1.5" />
+      <path d="M3.5 4.25l.65 8.4a1 1 0 0 0 1 .93h5.7a1 1 0 0 0 1-.93l.65-8.4" />
+      <path d="M6.5 6.75v4" />
+      <path d="M9.5 6.75v4" />
+    </svg>
+  );
+}
+
+// 클릭 한 번으로 되돌릴 수 없는 동작을 실행하지 않는다. 첫 클릭은 "armed" 상태로
+// 바꾸기만 하고(아이콘·색으로 신호), 그 상태에서 한 번 더 눌러야 실제로
+// 비운다. 무거운 모달 없이도 실수 클릭을 막는 가장 가벼운 방법이다.
+const CLEAR_ARM_TIMEOUT_MS = 4000;
+
+function ClearBufferButton({ onClear }: { onClear: () => Promise<void> }) {
+  const [armed, setArmed] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const disarmTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (disarmTimer.current != null) {
+        window.clearTimeout(disarmTimer.current);
+      }
+    };
+  }, []);
+
+  const disarm = () => {
+    if (disarmTimer.current != null) {
+      window.clearTimeout(disarmTimer.current);
+      disarmTimer.current = null;
+    }
+    setArmed(false);
+  };
+
+  const arm = () => {
+    setError(null);
+    setArmed(true);
+    disarmTimer.current = window.setTimeout(disarm, CLEAR_ARM_TIMEOUT_MS);
+  };
+
+  const confirmClear = async () => {
+    disarm();
+    setPending(true);
+    setError(null);
+    try {
+      await onClear();
+    } catch {
+      setError("비우지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const label = armed
+    ? "다시 누르면 버퍼를 비웁니다"
+    : "버퍼를 비우고 지금부터 새로 추적합니다";
+
+  return (
+    <>
+      <Tooltip label={label}>
+        {/* armed일 때는 icon-only(button--icon)를 벗긴다. hover/focus로만
+            뜨는 tooltip에 기대면(Safari는 클릭으로 버튼에 focus를 주지
+            않는다) 아이콘·색만 바뀌는 변화를 놓치기 쉽다 — 눈에 보이는
+            텍스트로 "한 번 더 누르면 실행된다"를 확실히 보여준다. */}
+        <Button
+          aria-label={label}
+          className={armed ? undefined : "button--icon"}
+          loading={pending}
+          onBlur={disarm}
+          onClick={armed ? confirmClear : arm}
+          size="sm"
+          variant={armed ? "danger" : "ghost"}
+        >
+          {armed ? <span aria-hidden="true">✓</span> : <TrashIcon />}
+          {armed ? " 비우기" : null}
         </Button>
       </Tooltip>
       {error ? (
