@@ -30,6 +30,11 @@ But in reality, it's hard to know:
 
 AsyncScope visualizes this execution process as a **timeline and animation**.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/timeline-dark.gif">
+  <img src="docs/assets/timeline-light.gif" alt="AsyncScope Timeline — when each request and Task holds the Event Loop and when it yields">
+</picture>
+
 ---
 
 # Quick start
@@ -90,6 +95,13 @@ time.sleep(1)
 ```
 
 behave completely differently from the Event Loop's perspective. But current dev tools don't explain this visually.
+
+AsyncScope finds the window where the Event Loop stalled and points at the line of code behind it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/analyzer-dark.png">
+  <img src="docs/assets/analyzer-light.png" alt="AsyncScope Analyzer — the time.sleep call that blocked the Event Loop for 300ms, with its source location">
+</picture>
 
 ---
 

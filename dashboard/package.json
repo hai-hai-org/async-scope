@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "biome check src",
     "check:tokens": "! grep -rnE 'font-size: *[0-9]+px|font-weight: *[0-9]+|z-index: *[0-9]+' src --include=*.css | grep -v 'tokens.css' | grep -v 'fonts.css'",
-    "check:surfaces": "node scripts/check-surfaces.mjs"
+    "check:surfaces": "node scripts/check-surfaces.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@radix-ui/react-switch": "^1.2.6",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.2.0",
     "@types/react": "^19.1.10",
-    "@types/react-dom": "^19.1.7"
+    "@types/react-dom": "^19.1.7",
+    "puppeteer-core": "^24.0.0"
   }
 }

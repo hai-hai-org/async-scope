@@ -32,6 +32,11 @@ async def get_users():
 
 AsyncScope는 이러한 실행 과정을 **타임라인과 애니메이션으로 시각화**하여 보여줍니다.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/timeline-dark.gif">
+  <img src="docs/assets/timeline-light.gif" alt="AsyncScope Timeline — 요청과 Task가 Event Loop를 언제 점유하고 언제 넘겨주는지 보여주는 화면">
+</picture>
+
 ---
 
 # Quick start
@@ -92,6 +97,13 @@ time.sleep(1)
 ```
 
 는 Event Loop 관점에서 완전히 다른 동작을 합니다. 하지만 현재 개발 도구는 이를 시각적으로 설명하지 못합니다.
+
+AsyncScope는 Event Loop가 멈춘 구간을 찾아 그 원인이 된 코드 줄까지 짚어줍니다.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/analyzer-dark.png">
+  <img src="docs/assets/analyzer-light.png" alt="AsyncScope Analyzer — Event Loop를 300ms 막은 time.sleep 호출과 그 코드 위치">
+</picture>
 
 ---
 
