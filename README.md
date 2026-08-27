@@ -1,4 +1,4 @@
-[English](README.en.md)
+[English](https://github.com/hai-hai-org/async-scope/blob/main/README.en.md)
 
 > Don't just write async.
 > 
