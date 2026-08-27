@@ -19,8 +19,9 @@ from ..config import apply_settings_patch, settings_payload, settings_state
 from ..export import buffer_metadata, clear_buffer, export_payload, replay_into
 from ..source import read_snippet
 from .sse import handle_sse
+from .static_files import UI_PREFIX, handle_static
 
-API_PREFIX = "/__asyncscope__/api"
+API_PREFIX = f"{UI_PREFIX}/api"
 REQUESTS_PATH = f"{API_PREFIX}/requests"
 FINDINGS_PATH = f"{API_PREFIX}/findings"
 SOURCE_PATH = f"{API_PREFIX}/source"
@@ -36,7 +37,7 @@ MAX_RADIUS = 50
 
 
 async def handle_api(app_scope, scope, receive, send) -> bool:
-    """내부 API 요청이면 응답하고 True를 반환한다.
+    """`/__asyncscope__` 요청이면 응답하고 True를 반환한다 (API + 대시보드 정적 파일).
 
     AsyncScope 인스턴스를 통째로 받는다. buffer, project_root, tracing 상태를 각각
     인자로 늘리면 endpoint를 더할 때마다 시그니처가 자란다.
@@ -46,10 +47,14 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
         return False
 
     path = scope.get("path", "")
-    if not path.startswith(API_PREFIX):
+    if not path.startswith(UI_PREFIX):
         return False
 
     method = scope.get("method")
+    # prefix 아래에서 /api가 아닌 건 전부 빌드된 대시보드다.
+    if not path.startswith(API_PREFIX):
+        return await handle_static(path, method, send)
+
     if path == SETTINGS_PATH:
         await _handle_settings(app_scope, method, receive, send)
         return True
@@ -71,7 +76,9 @@ async def handle_api(app_scope, scope, receive, send) -> bool:
     buffer = app_scope.buffer
     params = _query_params(scope)
     if path == REQUESTS_PATH:
-        await _guarded(send, lambda: query_requests(buffer.snapshot(), **_request_args(params)))
+        await _guarded(
+            send, lambda: query_requests(buffer.snapshot(), **_request_args(params))
+        )
     elif path == FINDINGS_PATH:
         await _guarded(send, lambda: _findings(app_scope, params))
     elif path == EVENTS_PATH:
@@ -138,7 +145,9 @@ def _finding(app_scope, finding_id: str) -> dict | None:
     return finding
 
 
-async def _handle_feedback(app_scope, finding_id: str, method: str, receive, send) -> None:
+async def _handle_feedback(
+    app_scope, finding_id: str, method: str, receive, send
+) -> None:
     """finding 하나에 사용자 표시를 남긴다. 표시해도 목록에서 걸러내지 않는다 — 숨김은 UI 결정이다."""
     if method != "POST":
         await _json_response(send, 405, {"error": "method_not_allowed"})
@@ -208,25 +217,34 @@ def _metrics_anchor(events: list[dict], source: str) -> int:
     return max(event.get("timestamp_ns") or 0 for event in events)
 
 
-async def _handle_source(project_root: str | Path, params: dict[str, list[str]], send) -> None:
+async def _handle_source(
+    project_root: str | Path, params: dict[str, list[str]], send
+) -> None:
     """project root 밖은 읽지 않는다. 경계 판정은 asyncscope/source.py 하나뿐이다."""
     file = _one(params, "file")
     if not file:
-        await _json_response(send, 400, {"error": "bad_request", "message": "file is required"})
+        await _json_response(
+            send, 400, {"error": "bad_request", "message": "file is required"}
+        )
         return
     try:
         line = int(_one(params, "line", "1"))
         radius = int(_one(params, "radius", "5"))
     except (TypeError, ValueError):
         await _json_response(
-            send, 400, {"error": "bad_request", "message": "line and radius must be integers"}
+            send,
+            400,
+            {"error": "bad_request", "message": "line and radius must be integers"},
         )
         return
     if line < 1 or not 0 <= radius <= MAX_RADIUS:
         await _json_response(
             send,
             400,
-            {"error": "bad_request", "message": f"line must be >= 1 and radius <= {MAX_RADIUS}"},
+            {
+                "error": "bad_request",
+                "message": f"line must be >= 1 and radius <= {MAX_RADIUS}",
+            },
         )
         return
 
@@ -243,7 +261,9 @@ async def _handle_source(project_root: str | Path, params: dict[str, list[str]],
     await _json_response(send, 200, payload)
 
 
-async def _handle_events(buffer, params: dict[str, list[str]], scope, receive, send) -> None:
+async def _handle_events(
+    buffer, params: dict[str, list[str]], scope, receive, send
+) -> None:
     try:
         await handle_sse(buffer, params, scope, receive, send)
     except QueryError as exc:
@@ -259,7 +279,9 @@ async def _handle_settings(app_scope, method: str, receive, send) -> None:
             body = await _json_body(receive)
             payload = apply_settings_patch(app_scope, body)
         except QueryError as exc:
-            await _json_response(send, 400, {"error": "bad_request", "message": str(exc)})
+            await _json_response(
+                send, 400, {"error": "bad_request", "message": str(exc)}
+            )
             return
         await _json_response(send, 200, payload)
         return
@@ -315,7 +337,9 @@ def _query_params(scope) -> dict[str, list[str]]:
     return parse_qs(raw.decode("utf-8"), keep_blank_values=True)
 
 
-def _one(params: dict[str, list[str]], name: str, default: str | None = None) -> str | None:
+def _one(
+    params: dict[str, list[str]], name: str, default: str | None = None
+) -> str | None:
     values = params.get(name)
     if not values:
         return default
@@ -345,7 +369,9 @@ async def _json_body(receive) -> dict:
 
 
 async def _json_response(send, status: int, payload: dict) -> None:
-    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8"
+    )
     await send(
         {
             "type": "http.response.start",

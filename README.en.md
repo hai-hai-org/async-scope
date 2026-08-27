@@ -32,6 +32,37 @@ AsyncScope visualizes this execution process as a **timeline and animation**.
 
 ---
 
+# Quick start
+
+Requires CPython 3.12+ (AsyncScope uses `sys.monitoring`).
+
+```bash
+pip install asyncscope-tracer
+```
+
+> The distribution is `asyncscope-tracer`; the import is `asyncscope`. An unrelated
+> package already owns the name `asyncscope` on PyPI, so only the distribution name differs.
+
+Wrap your ASGI app and hand the result to uvicorn.
+
+```python
+# main.py
+from fastapi import FastAPI
+from asyncscope import AsyncScope
+
+app = FastAPI()
+traced = AsyncScope(app).install()   # the ASGI app to give uvicorn
+```
+
+```bash
+uvicorn main:traced --port 8000
+```
+
+Open **http://localhost:8000/__asyncscope__/**. The dashboard ships inside the wheel —
+no separate process and no internet connection required.
+
+---
+
 # Problem
 
 FastAPI is easy to learn, but **its asynchronous execution model is invisible.**

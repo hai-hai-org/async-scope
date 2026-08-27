@@ -1,7 +1,7 @@
 [project]
-name = "asyncscope"
+name = "asyncscope-tracer"  # PyPI 배포명. import는 asyncscope 그대로다
 version = "0.1.0"
-description = "Async bottleneck profiler for ASGI apps"
+description = "Async execution tracer for ASGI apps — see what blocks the event loop"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"  # sys.monitoring
@@ -25,6 +25,11 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+# 대시보드 빌드 결과는 .gitignore 대상이라 hatchling이 기본으로 뺀다. 조용히 빠지면
+# wheel에 UI가 없는 채로 나가므로 명시한다.
+artifacts = ["src/asyncscope/web/static/**/*"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/asyncscope"]
