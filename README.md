@@ -40,6 +40,8 @@ CPython 3.12 이상이 필요합니다 (`sys.monitoring`을 씁니다).
 
 ```bash
 pip install asyncscope-tracer
+# 또는
+uv add asyncscope-tracer
 ```
 
 > 배포명은 `asyncscope-tracer`, import는 `asyncscope`입니다. PyPI에 `asyncscope`라는
@@ -57,11 +59,17 @@ traced = AsyncScope(app).install()   # uvicorn에 넘길 ASGI app
 ```
 
 ```bash
-uvicorn main:traced --port 8000
+uvicorn main:traced --reload --port 8000
 ```
+
+> uvicorn은 `main:app`이 아니라 `main:traced`를 가리켜야 합니다 — 대시보드
+> (`/__asyncscope__/*`)는 이 wrapper를 거쳐야만 열립니다.
 
 브라우저에서 **http://localhost:8000/__asyncscope__/** 를 엽니다. 대시보드는 wheel에 함께
 들어 있어 별도 프로세스나 인터넷 연결이 필요 없습니다.
+
+기존 코드를 바꿀 필요는 없습니다 — 위 두 줄만 추가하면 됩니다. 다 썼으면 그 두 줄만
+지우면 원래 앱으로 돌아갑니다(개발 환경 전용 도구입니다).
 
 ---
 

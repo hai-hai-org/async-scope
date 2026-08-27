@@ -38,6 +38,8 @@ Requires CPython 3.12+ (AsyncScope uses `sys.monitoring`).
 
 ```bash
 pip install asyncscope-tracer
+# or
+uv add asyncscope-tracer
 ```
 
 > The distribution is `asyncscope-tracer`; the import is `asyncscope`. An unrelated
@@ -55,11 +57,17 @@ traced = AsyncScope(app).install()   # the ASGI app to give uvicorn
 ```
 
 ```bash
-uvicorn main:traced --port 8000
+uvicorn main:traced --reload --port 8000
 ```
+
+> Point uvicorn at `main:traced`, not `main:app` — the dashboard (`/__asyncscope__/*`)
+> is only reachable through that wrapper.
 
 Open **http://localhost:8000/__asyncscope__/**. The dashboard ships inside the wheel —
 no separate process and no internet connection required.
+
+No changes to your existing code are needed — just the two lines above. Done debugging?
+Remove those two lines and you're back to your original app (this is a dev-only tool).
 
 ---
 
