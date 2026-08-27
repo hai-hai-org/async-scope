@@ -7,6 +7,14 @@ const TARGET = process.env.ASYNCSCOPE_TARGET ?? "http://localhost:8000";
 
 export default defineConfig({
   plugins: [react()],
+  // 설치본에서 대시보드는 /__asyncscope__/ 아래에 붙는다. 상대 base는 build에만
+  // 적용되고 dev server는 "/"로 되돌리므로, 아래 proxy 규칙과 충돌하지 않는다.
+  base: "./",
+  build: {
+    // 빌드 결과를 바로 패키지 안으로 떨군다 (복사 단계 없음). .gitignore에 예약돼 있다.
+    outDir: "../src/asyncscope/web/static",
+    emptyOutDir: true, // root 밖이라 명시해야 청소한다
+  },
   server: {
     port: 5173,
     strictPort: true,

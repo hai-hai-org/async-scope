@@ -1,4 +1,4 @@
-[English](README.en.md)
+[English](https://github.com/hai-hai-org/async-scope/blob/main/README.en.md)
 
 > Don't just write async.
 > 
@@ -31,6 +31,37 @@ async def get_users():
 를 알기 어렵습니다.
 
 AsyncScope는 이러한 실행 과정을 **타임라인과 애니메이션으로 시각화**하여 보여줍니다.
+
+---
+
+# Quick start
+
+CPython 3.12 이상이 필요합니다 (`sys.monitoring`을 씁니다).
+
+```bash
+pip install asyncscope-tracer
+```
+
+> 배포명은 `asyncscope-tracer`, import는 `asyncscope`입니다. PyPI에 `asyncscope`라는
+> 다른 패키지가 이미 있어서 배포명만 다릅니다.
+
+ASGI app을 감싸고 uvicorn에 넘기면 끝입니다.
+
+```python
+# main.py
+from fastapi import FastAPI
+from asyncscope import AsyncScope
+
+app = FastAPI()
+traced = AsyncScope(app).install()   # uvicorn에 넘길 ASGI app
+```
+
+```bash
+uvicorn main:traced --port 8000
+```
+
+브라우저에서 **http://localhost:8000/__asyncscope__/** 를 엽니다. 대시보드는 wheel에 함께
+들어 있어 별도 프로세스나 인터넷 연결이 필요 없습니다.
 
 ---
 
