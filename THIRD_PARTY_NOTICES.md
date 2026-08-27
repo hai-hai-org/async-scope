@@ -37,3 +37,23 @@ Font Name 조항에 해당하는 이름(`Source`)은 사용하지 않는다.
 `asyncscope` 패키지 자체는 런타임 의존성이 없다 (`pyproject.toml`의 `dependencies = []`).
 대시보드 프론트엔드의 빌드 의존성은 `dashboard/package.json`에 있으며 배포물에는
 빌드 결과물만 포함된다.
+
+## SBOM (직접 의존성)
+
+2026년 오픈소스 개발자대회 결과보고서 붙임1과 같은 내용이다. 전체 목록은
+`pyproject.toml`(Python)과 `dashboard/package.json`(프론트엔드)에 있다.
+
+| 라이브러리 | 버전 | 라이선스 | 저장소 | 용도 / 결합 방식 |
+|---|---|---|---|---|
+| React · React DOM | 19.2.8 | MIT | github.com/facebook/react | 대시보드 UI 렌더링 / 라이브러리로 불러 쓰고 빌드 산출물을 wheel에 포함 |
+| Noto Sans KR | 2.004 | OFL-1.1 | github.com/notofonts/noto-cjk | 한글 본문 서체 / WOFF2를 복사해 wheel에 포함(재배포) |
+| JetBrains Mono | 2.211 | OFL-1.1 | github.com/JetBrains/JetBrainsMono | 고정폭 서체 / WOFF2를 복사해 wheel에 포함(재배포) |
+| @radix-ui/react-* 외 2개 | 1.2.11~1.3.7 | MIT | github.com/radix-ui/primitives | 접근성 준수 스위치·툴팁·숨김 텍스트 / 라이브러리로 불러 씀 |
+| Vite | 7.3.6 | MIT | github.com/vitejs/vite | 대시보드 번들 빌드 / 빌드 도구로 실행 |
+| TypeScript | 5.9.3 | Apache-2.0 | github.com/microsoft/TypeScript | 정적 타입 검사 / 빌드 도구로 실행 |
+| Hatchling | 1.32.0 | MIT | github.com/pypa/hatch | wheel 빌드 백엔드 / 빌드 도구로 실행 |
+| FastAPI | 0.141.1 | MIT | github.com/fastapi/fastapi | 데모 앱 구성 / 라이브러리로 불러 씀 (데모·테스트 전용) |
+| Uvicorn | 0.52.3 | BSD-3-Clause | github.com/encode/uvicorn | 데모 앱 구동 ASGI 서버 / 실행 파일 호출 |
+| pytest | 9.1.1 | MIT | github.com/pytest-dev/pytest | 백엔드 테스트 실행 / 실행 파일 호출 |
+
+GPL·AGPL·LGPL 계열 의존성은 없다.
